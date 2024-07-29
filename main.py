@@ -31,6 +31,7 @@ def get_verify():
     print(f"Webhook verification started...")
     mode = request.args.get('hub.mode')
     token = request.args.get('hub.verify_token')
+    challenge = request.args.get('hub.challenge')
 
     print(f"Mode: {mode} | Token: {token}")
     
@@ -40,7 +41,7 @@ def get_verify():
         if mode == 'subscribe' and token == 'whatsapp_co123':
             # Respond with 200 OK
             print('WEBHOOK_VERIFIED')
-            return '', 200
+            return f'{challenge}', 200
         else:
             # Respond with '403 Forbidden' if verify tokens do not match
             return '', 403
