@@ -1,5 +1,13 @@
 .env
 databases/
+threads_db.db
+assistants_db.db
+close_session.py
+downloaded_images/
+test.py
+test2.py
+1.json
+to_do_list.txt
 
 
 # Byte-compiled / optimized / DLL files

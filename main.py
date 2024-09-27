@@ -1,4 +1,6 @@
 from load_env import load_vars
+from save_img import execute_download
+import tracemalloc
 
 import json
 import os
@@ -6,14 +8,25 @@ import requests
 from flask import Flask, jsonify, request, make_response
 from openai import OpenAI
 import asyncio
+import certifi
+import aiohttp
+from aiohttp import web
+import ssl
+from threading import Lock
+
+# session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl_context=certifi.where()))
 
 from interactObjects.interact import Interact
 from interactObjects.processDocs import ProcessDocs
 from interactObjects.whatsappInteract import WhatsAppHandler
 
-app = Flask(__name__)
+# app = Flask(__name__)
 
 load_vars()
+
+execute_download()
+
+processing_lock = Lock()
 
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 WHATSAPP_VERSION = os.getenv("WHATSAPP_VERSION")
@@ -26,35 +39,24 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 
 
 
-@app.route('/webhook', methods=['GET'])
-def get_verify():
-    print(f"Webhook verification started...")
-    mode = request.args.get('hub.mode')
-    token = request.args.get('hub.verify_token')
-    challenge = request.args.get('hub.challenge')
+async def get_verify(request):
+    mode = request.query.get('hub.mode')
+    token = request.query.get('hub.verify_token')
+    challenge = request.query.get('hub.challenge')
 
-    print(f"Mode: {mode} | Token: {token}")
-    
-    # Check if a token and mode were sent
     if mode and token:
-        # Check the mode and token sent are correct
         if mode == 'subscribe' and token == 'whatsapp_co123':
-            # Respond with 200 OK
-            print('WEBHOOK_VERIFIED')
-            return f'{challenge}', 200
+            return web.Response(text=challenge)
         else:
-            # Respond with '403 Forbidden' if verify tokens do not match
-            return '', 403
+            return web.Response(status=403)
     else:
-        # Respond with '400 Bad Request' if mode or token are missing
-        return '', 400
+        return web.Response(status=400)
+    
 
 
 
-@app.route('/webhook', methods=['POST'])
-async def webhook():
-    body = request.get_json()
-
+async def webhook(request):
+    body = await request.json()
     object = body.get('object')
     if object:
         # IF MESSAGE DOES NOT COME FROM BUTTON
@@ -65,6 +67,8 @@ async def webhook():
             # WHATSAPP BUSINESS PHONE NUMBER ID for the url Endpoint
             phone_number_id = body['entry'][0]['changes'][0]['value']['metadata']['phone_number_id']
 
+            print("Phone Number ID: ", phone_number_id)
+
 
             # Customer's phone number:
             phone_number = body['entry'][0]['changes'][0]['value']['messages'][0]['from']
@@ -72,23 +76,41 @@ async def webhook():
 
             # Customer's Whastapp User Name :
             user_name = body['entry'][0]['changes'][0]['value']['contacts'][0]['profile']['name']
-
             
+            message_id = body['entry'][0]['changes'][0]['value']['messages'][0]['id']
+            print('Message ID: ', message_id)
             
             #FOR TEXT
             if body['entry'][0]['changes'][0]['value']['messages'][0].get('text'):
-                
+                 
                user_message = body['entry'][0]['changes'][0]['value']['messages'][0]['text']['body']
-               interact = Interact(phone_number, phone_number_id, client, AIRTABLE_API_KEY, WHATSAPP_VERSION, WHATSAPP_TOKEN, user_name)
-                
-                
-               whatsapp = WhatsAppHandler(WHATSAPP_TOKEN, WHATSAPP_VERSION, phone_number_id, user_name, client)
-              
+
+
+               interact = Interact(phone_number, phone_number_id, client, WHATSAPP_VERSION, WHATSAPP_TOKEN, user_name)
+
+
                assistant_response = interact.interact_w_ass1(payload={
                     "type": "text",
                     "text": user_message
                })
-               await whatsapp.send_whatsapp_message(assistant_response)
+               
+
+               print("Assistant Response: ", assistant_response)
+
+               whatsapp = WhatsAppHandler(assistant_response, WHATSAPP_TOKEN, WHATSAPP_VERSION, phone_number_id, user_name, client, phone_number, message_id)
+               
+               # Acquire lock to ensure single processing
+               if processing_lock.acquire(blocking=False):
+                    try:
+                        await whatsapp.send_whatsapp_message()
+                    except Exception as e:
+                        return web.json_response({"status": "error", "message": str(e)}, status=500)
+                    finally:
+                        processing_lock.release()
+                        await whatsapp.close_session()
+               else:
+                    return web.json_response({"status": "already processing"}, status=202)
+
 
 
             #FOR AUDIO
@@ -118,9 +140,8 @@ async def webhook():
                     )
                     audio_transcript = transcription.text
 
-                    interact = Interact(phone_number, phone_number_id, client, AIRTABLE_API_KEY, WHATSAPP_VERSION, WHATSAPP_TOKEN, user_name)
+                    interact = Interact(phone_number, phone_number_id, client, WHATSAPP_VERSION, WHATSAPP_TOKEN, user_name)
 
-                    whatsapp = WhatsAppHandler(WHATSAPP_TOKEN, WHATSAPP_VERSION, phone_number_id, user_name, client)
                     
                     if audio_transcript:
                         assistant_response = interact.interact_w_ass1(
@@ -129,7 +150,12 @@ async def webhook():
                                 'payload': audio_transcript,
                             }
                         )
-                        await whatsapp.send_whatsapp_message(assistant_response)
+                        
+                        whatsapp = WhatsAppHandler(assistant_response, WHATSAPP_TOKEN, WHATSAPP_VERSION, phone_number_id, user_name, client, phone_number, message_id)
+
+                        response = await whatsapp.send_whatsapp_message()
+                        await whatsapp.close_session()
+                        return web.json_response({"response": f"{response}","status": "success"})
 
             # FOR IMAGE
             elif body['entry'][0]['changes'][0]['value']['messages'][0].get('image'):
@@ -145,9 +171,9 @@ async def webhook():
                         gpt_image_url = media_response.json()['url']
 
 
-                        interact = Interact(phone_number, phone_number_id, client, AIRTABLE_API_KEY, WHATSAPP_VERSION, WHATSAPP_TOKEN, user_name)
+                        interact = Interact(phone_number, phone_number_id, client, WHATSAPP_VERSION, WHATSAPP_TOKEN, user_name)
 
-                        whatsapp = WhatsAppHandler(WHATSAPP_TOKEN, WHATSAPP_VERSION, phone_number_id, user_name, client)
+                        whatsapp = WhatsAppHandler(assistant_response, WHATSAPP_TOKEN, WHATSAPP_VERSION, phone_number_id, user_name, client, phone_number, message_id)
                         
 
                         image_vision = client.chat.completions.create(
@@ -177,10 +203,13 @@ async def webhook():
                                     'content': image_transcript,
                                 }
                             )
-                            await whatsapp.send_whatsapp_message(assistant_response)
-
+                            response = await whatsapp.send_whatsapp_message()
+                            await whatsapp.close_session()
+                            return web.json_response({"response": f"{response}","status": "success"})
+                        
                     except Exception as e:
                         print(f"Error fetching media URL: {e}")
+                        return web.json_response({"status": "error", "message": str(e)}, status=500)
 
 
             
@@ -206,28 +235,32 @@ async def webhook():
                         doc_process = ProcessDocs(filename, mime_type)
                         file_content = doc_process.process_document(filename, mime_type)
                         
-                        interact = Interact(phone_number, phone_number_id, client, AIRTABLE_API_KEY, WHATSAPP_VERSION, WHATSAPP_TOKEN, user_name)
+                        interact = Interact(phone_number, phone_number_id, client, WHATSAPP_VERSION, WHATSAPP_TOKEN, user_name)
 
-                        whatsapp = WhatsAppHandler(WHATSAPP_TOKEN, WHATSAPP_VERSION, phone_number_id, user_name, client)
+                        whatsapp = WhatsAppHandler(assistant_response, WHATSAPP_TOKEN, WHATSAPP_VERSION, phone_number_id, user_name, client, phone_number, message_id)
                         
                         assistant_response = interact.interact_w_ass1(
                             payload={
                                 "type": "document",
                                 "content": file_content,
                             })
-                        await whatsapp.send_whatsapp_message(assistant_response)
+                        response = await whatsapp.send_whatsapp_message()
+                        await whatsapp.close_session()
+                        return web.json_response({"response": f"{response}","status": "success"})
                         
                     else:
                         print(f"Failed to download document. Status code: {response.status_code}")
+                        return web.json_response({"status": "error", "message": response}, status=response.status_code)
                 
             
+
             # CUSTOMER COMES FROM ADS
             elif body['entry'][0]['changes'][0]['value']['messages'][0].get('referral'):
                 # COLLECT DATA ON AD POST TO BETTER CONTEXT RESPONSE
 
-                interact = Interact(phone_number, phone_number_id, client, AIRTABLE_API_KEY, WHATSAPP_VERSION, WHATSAPP_TOKEN, user_name)
+                interact = Interact(phone_number, phone_number_id, client, WHATSAPP_VERSION, WHATSAPP_TOKEN, user_name)
 
-                whatsapp = WhatsAppHandler(WHATSAPP_TOKEN, WHATSAPP_VERSION, phone_number_id, user_name, client)
+                whatsapp = WhatsAppHandler(assistant_response, WHATSAPP_TOKEN, WHATSAPP_VERSION, phone_number_id, user_name, client, phone_number, message_id)
                 
                 source_url = body['entry'][0]['changes'][0]['value']['messages'][0]['referral']['source_url']
                 source_type = body['entry'][0]['changes'][0]['value']['messages'][0]['referral']['source_type']
@@ -241,14 +274,17 @@ async def webhook():
                         "type": "from_ads",
                         "content": f"Greet customer that cliecked on advertisement. Advertisement information: Source url of the post the customer came from: {source_url}, Source type: {source_type}, Source ID: {source_id}, Headline of the ad: {headline}, Ad body: {ad_body}, Type of add: {media_type}"
                     })
-                await whatsapp.send_whatsapp_message(assistant_response)
+                response = await whatsapp.send_whatsapp_message()
+                await whatsapp.close_session()
+                return web.json_response({"response": f"{response}","status": "success"})
                 
+
             else:
                 # FOR INTERACTIVE MESSASGES REPLIES
                 interactive_msg = body['entry'][0]['changes'][0]['value']['messages'][0].get('interactive')
 
-                interact = Interact(phone_number, phone_number_id, client, AIRTABLE_API_KEY, WHATSAPP_VERSION, WHATSAPP_TOKEN, user_name)
-                
+                interact = Interact(phone_number, phone_number_id, client, WHATSAPP_VERSION, WHATSAPP_TOKEN, user_name)
+
                 # FOR BUTTON REPLIES
                 if interactive_msg and 'button_reply' in interactive_msg:
                     # button_reply_id = interactive_msg['button_reply']['id']
@@ -256,18 +292,19 @@ async def webhook():
                         payload={
                             'type': "button_reply",
                             'text': interactive_msg['button_reply']['title']
-                        }
-                    )
-                    whatsapp = WhatsAppHandler(WHATSAPP_TOKEN, WHATSAPP_VERSION, phone_number_id, user_name, client)
-                    await whatsapp.send_whatsapp_message(assistant_response)
+                            })
+                    whatsapp = WhatsAppHandler(assistant_response, WHATSAPP_TOKEN, WHATSAPP_VERSION, phone_number_id, user_name, client, phone_number, message_id)
+                    response = await whatsapp.send_whatsapp_message()
+                    await whatsapp.close_session()
+                    return web.json_response({"response": f"{response}","status": "success"})
 
-        return jsonify({'message': 'ok'}), 200
-    
+        return web.json_response({'message': 'ok'})
     else:
-        return jsonify({'message': 'error | unexpected body'}), 400
+        return web.json_response({'message': 'error | unexpected body'}, status=400)
+
     
 
-@app.route('/', methods=['GET'])
+
 def home():
     return jsonify({
         'success': True,
@@ -275,7 +312,23 @@ def home():
         'error': None
     })
 
+tracemalloc.start()
+
+
+# import logging
+
+# logging.basicConfig(level=logging.DEBUG)
+
+
+app = web.Application()
+app.add_routes([web.get('/webhook', get_verify)])
+app.add_routes([web.post('/webhook', webhook)])
+app.add_routes([web.get('/', home)])
+
+
+# asyncio.run(main())
+
+
 if __name__ == '__main__':
     port = 3000
-    print(f'webhook is listening on port {port}')
-    app.run(port=port)
+    web.run_app(app, port=port)

@@ -1,4 +1,7 @@
-import requests
+import certifi
+import aiohttp
+import ssl
+
 from openai import OpenAI
 
 from load_env import load_vars
@@ -16,7 +19,7 @@ async def cta_url(assistant_text, phone_number, phone_number_id):
     create_header = client.chat.completions.create(
         model="gpt-4o-mini",
         messages=[
-            {"system": ""},
+            {"system": f"{assistant_text}"},
             {"user": ""}
         ]
     )
@@ -98,5 +101,9 @@ async def cta_url(assistant_text, phone_number, phone_number_id):
         }
     }
 
-    response = requests.post(url=url, headers=headers, data=data)
-    return response.json()
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+
+    session = aiohttp.ClientSession()
+
+    async with session.post(url, headers=headers, json=data, ssl_context=ssl_context) as response:
+        return await response.json()

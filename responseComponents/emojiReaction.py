@@ -1,4 +1,7 @@
-import requests
+import ssl
+import aiohttp
+import certifi
+
 from openai import OpenAI
 
 from load_env import load_vars
@@ -24,6 +27,8 @@ async def emojiReaction(assistant_text, phone_number, phone_number_id, message_i
   ]
 )
     emoji_reaction = response.choices[0].message.content
+
+    print("Model reacted with: ", emoji_reaction)
     
     url = f'https://graph.facebook.com/{WHATSAPP_VERSION}/{phone_number_id}/messages'
     headers = {
@@ -40,6 +45,11 @@ async def emojiReaction(assistant_text, phone_number, phone_number_id, message_i
         "emoji": f"{emoji_reaction}"
       }
     }
-    response = requests.post(url, headers=headers, data=data)
-    return response.json()
+
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+
+    session = aiohttp.ClientSession()
+
+    async with session.post(url, headers=headers, json=data, ssl_context=ssl_context) as response:
+        return await response.json()
   

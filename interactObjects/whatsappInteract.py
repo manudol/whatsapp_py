@@ -1,12 +1,15 @@
 from load_env import load_vars
 import os
+import re
 
+import certifi
+import ssl
 import aiohttp
 import asyncio
 from io import BytesIO
 from openai import OpenAI
 
-from responseComponents import card, carousel, markAsRead, text, location, emojiReaction, ctaURL, audioMessage, flows
+from responseComponents import audioResponse, card, carousel, text, emojiReaction, ctaURL
 
 load_vars()
 
@@ -31,55 +34,72 @@ class WhatsAppHandler:
         self.phone_number = phone_number
         self.assistant_text = assistant_text
         self.message_id = message_id
+        self.session = aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(
+                ssl=ssl.create_default_context(cafile=certifi.where())
+            )
+        )
 
     
-
-    def determine_output_type(self, user_message):
-      response = client.chat.completions.create(
-          model="gpt-4o-mini",
-            messages=[
-              {"role": "system", "content": "You are a helpful assistant."},
-              {"role": "user", "content": f"{user_message}"}]
-      )
-      reply = response.choices[0].message.content
-      return reply
-
-    
-
+    async def close_session(self):
+        await self.session.close()
   
     async def send_whatsapp_message(self):
-        response = client.chat.completions.create(
-          model="gpt-4o-mini",
-            messages=[
-              {"role": "system", "content": """
-                    
+        print(self.assistant_text)
+        # Define the regular expression pattern to find the end message
+        pattern = r'\s*OUTPUT TYPE:\s*\'([^\']+)\'$'
+        
+        # Search for the pattern in the text
+        match = re.search(pattern, str(self.assistant_text), re.IGNORECASE)
+        
+        # If a match is found, extract the output type and remove it from the text
+        if match:
+            output_type = match.group(1).lower()  # Extract and lowercase the output type
+            ai_output = re.sub(pattern, '', str(self.assistant_text), flags=re.IGNORECASE)  # Remove the pattern from the text
+            print("New reformatted text: ", ai_output)
+            print(output_type)
+            output_type_mapping = {
+                "text": text.text,
+                "audio": audioResponse.audioMessage,
+                "carousel": carousel.carousel,
+                "ctaURL": ctaURL.cta_url,
+                # "flow": flows,
+                "card": card.card,
+                "emoji_react": emojiReaction.emojiReaction,
+                # "location": location.send_location,
+                # "markAsRead": markAsRead
+            }
 
-                      """
-                  },
-              {"role": "user", "content": f"{self.assistant_text}"}]
-        )
-        output_type = response.choices[0].message.content
+            # Get the corresponding function based on output_type
+            post_function = output_type_mapping.get(str(output_type))
 
-        output_type_mapping = {
-            "text": text(self.assistant_text, self.phone_number, self.phone_number_id),
-            "audio": audioMessage(self.assistant_text, self.phone_number, self.phone_number_id),
-            "carousel": card(self.assistant_text, self.phone_number, self.phone_number_id),
-            "ctaURL": ctaURL(self.assistant_text, self.phone_number, self.phone_number_id),
-            # "flow": flows(self.assistant_text, self.phone_number, self.phone_number_id, self.message_id),
-            "card": carousel(self.assistant_text, self.phone_number, self.phone_number_id),
-            "emoji": emojiReaction(self.assistant_text, self.phone_number, self.phone_number_id, self.message_id),
-            "location": location(self.assistant_text, self.phone_number, self.phone_number_id),
-            # "markAsRead": markAsRead(self.phone_number_id, self.message_id)
-        }
+            args_mapping = {
+                "text": (ai_output, self.phone_number, self.phone_number_id),
+                "audio": (ai_output, self.phone_number, self.phone_number_id),
+                "carousel": (ai_output, self.phone_number, self.phone_number_id),
+                "ctaURL": (ai_output, self.phone_number, self.phone_number_id),
+                # "flow": flows,
+                "card": (ai_output, self.phone_number, self.phone_number_id),
+                "emoji_react": (ai_output, self.phone_number, self.phone_number_id, self.message_id),
+                # "location": (ai_output, self.phone_number, self.phone_number_id),
+                # "markAsRead": markAsRead
+            }
 
-        # Get the corresponding function based on output_type
-        post_function = output_type_mapping.get(str(output_type))
+            args = args_mapping.get(str(output_type))
 
-        if post_function:
-            return await post_function
+            if post_function:
+                print(f"Trigerring function: {post_function.__name__}")
+                return await post_function(*args)
+            else:
+                # Default action or error handling
+                response = {"message": "no message"}
+                async with self.session.post(url="https://api.whatsapp.com/send_default", json=response) as resp:
+                    return await resp.json()
+                
         else:
             # Default action or error handling
-            async with self.session.post("https://api.whatsapp.com/send_default", json=response) as resp:
+            response = {"message": "no message"}
+            async with self.session.post(url="https://api.whatsapp.com/send_default", json=response) as resp:
                 return await resp.json()
 
 

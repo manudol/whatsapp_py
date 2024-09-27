@@ -3,7 +3,10 @@ import time
 import json
 import requests
 import shelve
-import asyncio
+
+import aiohttp
+import ssl
+import certifi
 
 from openai import OpenAI
 from prompts import system_prompt
@@ -33,21 +36,34 @@ class Interact:
         # self.assistant_id = None
         # self.thread_id = None
         self.initialize_assistant()
+        self.session = aiohttp.ClientSession(
+            connector=aiohttp.TCPConnector(
+                ssl=ssl.create_default_context(cafile=certifi.where())
+            )
+        )
+
+    
+    async def close_session(self):
+        await self.session.close()
 
     
     def initialize_assistant(self):
         thread_id = self.check_if_thread_exists()
         assistant_id = self.check_if_assistant_exists()
-        if assistant_id and thread_id is None:
+    
+        if assistant_id == None and thread_id == None:
+            print("No threads or assistant detected. Creating them now...")
             assistant_id = self.create_assistant()
             thread_id = self.create_thread()
             self.store_thread(thread_id)
             self.store_assistant(assistant_id)
+            print("Creating Thread_id: ", thread_id)
+            print("Creating Assistant_id: ", assistant_id)
             print(f"Creating thread and assistant for new user: {self.user_name}, with phone number {self.phone_number}")
         
         # Otherwise, retrieve the existing thread
         else:
-            print(f"Retrieving existing thread & assistant for {self.user_name} with phone number {self.phone_number}")
+            print(f"Retrieving existing thread {thread_id} & assistant {assistant_id} for {self.user_name} with phone number {self.phone_number}")
         
         return {"assistant_id": assistant_id, "thread_id": thread_id}
             
@@ -87,7 +103,7 @@ class Interact:
         file_paths = ["./databases/farmapiel_shipping_return_policy.docx", 
                     "./databases/farmapiel_privacy_policy.docx", 
                     "./databases/farmapiel_terms_of_service.docx", 
-                    "./databases/Help Center Farmapiel - Digital Farmapiel.pdf", 
+                    "./databases/customer_service.pdf", 
                     "./databases/farmapiel_product_list.docx"]
         file_streams = [open(path, "rb") for path in file_paths]
 
@@ -130,7 +146,7 @@ class Interact:
     
     
     
-    async def interact_w_ass1(self, payload):
+    def interact_w_ass1(self, payload):
         message_type = payload["type"]
         user_message = payload["text"]
         result = self.initialize_assistant()
@@ -168,9 +184,9 @@ class Interact:
                     print("Response:", message_content.value)
                     response = message_content.value
         
-                    return {"response": response, "status": "completed"}
+                    return response
                 else:
-                    await asyncio.sleep(1)  # Add a small delay to avoid spamming the API
+                    time.sleep(1)  # Add a small delay to avoid spamming the API
             else:
                 print("Run not completed in time, restarting function")
                 return 400

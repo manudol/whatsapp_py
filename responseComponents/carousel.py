@@ -1,507 +1,205 @@
-import requests
+import aiohttp
+import asyncio
+import certifi
+import ssl
 import re
-import csv
-
 from load_env import load_vars
 import os
-
+import csv
+import time
+import random
 
 load_vars()
 
 WHATSAPP_TOKEN = os.getenv('WHATSAPP_TOKEN')
 WHATSAPP_VERSION = os.getenv('WHATSAPP_VERSION')
+FILES_DIRECTORY = "./downloaded_images"
 
-async def carousel(assistant_text, phone_number, phone_number_id):
+ssl_context = ssl.create_default_context(cafile=certifi.where())
+
+
+async def upload_file(session, file_path, phone_number_id):
+    try:
+        # Extract the file name
+        file_name = os.path.basename(file_path)
+        # Determine the MIME type based on the file extension (this is simplified for images)
+        mime_type = "image/jpeg" if file_name.endswith(".jpg") else "image/png"  # Adjust if necessary
+
+        # Prepare the form data for the request
+        form_data = aiohttp.FormData()
+        form_data.add_field('file', open(file_path, 'rb'), filename=file_name)
+        form_data.add_field('type', mime_type)
+        form_data.add_field('messaging_product', 'whatsapp')
+
+        url = f'https://graph.facebook.com/{WHATSAPP_VERSION}/{phone_number_id}/media'
+
+        headers = {"Authorization": f"Bearer {WHATSAPP_TOKEN}"}
+
+        # session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl=ssl_context))
+
+        # Make the POST request to WhatsApp API
+        async with session.post(url, headers=headers, data=form_data, ssl_context=ssl_context) as response:
+            # Parse the JSON response to get the media ID
+            if response.status == 200:
+                result = await response.json()
+                return result['id']
+            else:
+                print(f"Failed to upload {file_name}: {response.status}")
+                return None
+    except Exception as e:
+        print(f"Error uploading {file_name}: {str(e)}")
+        return None
+
+
+
+async def upload_files(file_list, phone_number_id):
+    async with aiohttp.ClientSession() as session:
+        tasks = []
+        # Loop over the file list and create a task for each upload
+        for file_name in file_list:
+            file_path = os.path.join(FILES_DIRECTORY, file_name)
+            tasks.append(upload_file(session, file_path, phone_number_id))
+        
+        # Run all the tasks concurrently
+        media_ids = await asyncio.gather(*tasks)
+        return media_ids
+    
+
+
+async def carousel123(assistant_text, phone_number_id, phone_number):
+    print("Assistant text received for carousel: ", assistant_text)
 
     numbers = re.findall(r'\[(\d+)\]', assistant_text)
     numbers = [int(num) for num in numbers]
 
+    print("Product IDs", numbers)
+
     csv_file = "./databases/products_db.csv"
-
-    for number in numbers:
-        with open(csv_file, mode='r') as file:
-            csv_reader = csv.DictReader(file)
-            for row in csv_reader:
-                records = []
-                if row['product id'] == number:
-                    records.append({'product_name': row['name'], 'product_image_url': row['image_url'], 'product_url': row['product_URLs'], 'descriptions': row['description']})
-  
-
-    url_count = len(numbers)
-
-    print(numbers)
-    print(records)
-    print(url_count)
 
     # Initialize lists to store the extracted information
     names = []
-    image_urls = []
+    image_files = []
     urls = []
-    image_ids = []
-    s_descriptions = []
 
-    # Iterate over the JSON data to extract the required information
-    for record in records:
-        names.append(record["name"])
-        image_urls.append(record["image_url"])
-        urls.append(record["product_URLs"])
-        s_descriptions.append(record['descriptions'])
+    # existing_files = os.listdir('downloaded_images')
 
-    for image_url in image_urls:
-        url1 = f'https://graph.facebook.com/{WHATSAPP_VERSION}/{phone_number_id}/media'
-        headers1 = {
-            'Authorization': f'Bearer {WHATSAPP_TOKEN}'
-        }
-        files = {
-            'file': f'{image_url}',
-            'type': 'image/png',
-            'messaging_product': 'whatsapp'
-        }
+    for num in numbers:
+        image_files.append(f"{num}.jpg")
 
-        wa_file_upload = requests.post(url=url1, headers=headers1, files=files)
-        wa_file_upload_json = wa_file_upload.json()
-        image_id = wa_file_upload_json.get('id')
-        image_ids.append(image_id)
+    # .... Not done from here ....
 
-    if url_count == 5:
-        response = {
-      "type": "CAROUSEL",
-      "cards": [
-        {
-          "components": [
-            {
-              "type": "HEADER",
-              "format": f"{names[0]}",
-              "example": {
-                "header_handle": [f"{image_ids[0]}"]
-              }
-            },
-            {
-              "type": "BODY",
-              "text": f"{s_descriptions[0]}"
-            },
-            {
-              "type": "BUTTONS",
-              "buttons": [
-                {
-                  "type": "URL",
-                  "text": "Shop Now",
-                  "url": f"{url[0]}"}
-              ]
-            }
-          ]
-        },
+    with open(csv_file) as file:
+        csv_reader = csv.reader(file)
+        records=[row for idx, row in enumerate(csv_reader) if idx in (numbers)]
 
-        {
-          "components": [
-            {
-              "type": "HEADER",
-              "format": f"{names[1]}",
-              "example": {
-                "header_handle": [f"{image_ids[1]}"]
-              }
-            },
-            {
-              "type": "BODY",
-              "text": f"{s_descriptions[1]}"
-            },
-            {
-              "type": "BUTTONS",
-              "buttons": [
-                {
-                  "type": "URL",
-                  "text": "Shop Now",
-                  "url": f"{url[1]}"}
-              ]
-            }
-          ]
-        },
 
-        {
-          "components": [
-            {
-              "type": "HEADER",
-              "format": f"{names[2]}",
-              "example": {
-                "header_handle": [f"{image_ids[2]}"]
-              }
-            },
-            {
-              "type": "BODY",
-              "text": f"{s_descriptions[2]}"
-            },
-            {
-              "type": "BUTTONS",
-              "buttons": [
-                {
-                  "type": "URL",
-                  "text": "Shop Now",
-                  "url": f"{url[2]}"}
-              ]
-            }
-          ]
-        },
-
-        {
-          "components": [
-            {
-              "type": "HEADER",
-              "format": f"{names[3]}",
-              "example": {
-                "header_handle": [f"{image_ids[3]}"]
-              }
-            },
-            {
-              "type": "BODY",
-              "text": f"{s_descriptions[0]}"
-            },
-            {
-              "type": "BUTTONS",
-              "buttons": [
-                {
-                  "type": "URL",
-                  "text": "Shop Now",
-                  "url": f"{url[3]}"}
-              ]
-            }
-          ]
-        },
-
-        {
-          "components": [
-            {
-              "type": "HEADER",
-              "format": f"{names[4]}",
-              "example": {
-                "header_handle": [f"{image_ids[4]}"]
-              }
-            },
-            {
-              "type": "BODY",
-              "text": f"{s_descriptions[4]}"
-            },
-            {
-              "type": "BUTTONS",
-              "buttons": [
-                {
-                  "type": "URL",
-                  "text": "Shop Now",
-                  "url": f"{url[4]}"}
-              ]
-            }
-          ]
-        }]
-        }
-        
-    elif url_count == 4:
-        response = {
-      "type": "CAROUSEL",
-      "cards": [
-        {
-          "components": [
-            {
-              "type": "HEADER",
-              "format": f"{names[0]}",
-              "example": {
-                "header_handle": [f"{image_ids[0]}"]
-              }
-            },
-            {
-              "type": "BODY",
-              "text": f"{s_descriptions[0]}"
-            },
-            {
-              "type": "BUTTONS",
-              "buttons": [
-                {
-                  "type": "URL",
-                  "text": "Shop Now",
-                  "url": f"{url[0]}"}
-              ]
-            }
-          ]
-        },
-
-        {
-          "components": [
-            {
-              "type": "HEADER",
-              "format": f"{names[1]}",
-              "example": {
-                "header_handle": [f"{image_ids[1]}"]
-              }
-            },
-            {
-              "type": "BODY",
-              "text": f"{s_descriptions[1]}"
-            },
-            {
-              "type": "BUTTONS",
-              "buttons": [
-                {
-                  "type": "URL",
-                  "text": "Shop Now",
-                  "url": f"{url[1]}"}
-              ]
-            }
-          ]
-        },
-
-        {
-          "components": [
-            {
-              "type": "HEADER",
-              "format": f"{names[2]}",
-              "example": {
-                "header_handle": [f"{image_ids[2]}"]
-              }
-            },
-            {
-              "type": "BODY",
-              "text": f"{s_descriptions[2]}"
-            },
-            {
-              "type": "BUTTONS",
-              "buttons": [
-                {
-                  "type": "URL",
-                  "text": "Shop Now",
-                  "url": f"{url[2]}"}
-              ]
-            }
-          ]
-        },
-
-        {
-          "components": [
-            {
-              "type": "HEADER",
-              "format": f"{names[3]}",
-              "example": {
-                "header_handle": [f"{image_ids[3]}"]
-              }
-            },
-            {
-              "type": "BODY",
-              "text": f"{s_descriptions[0]}"
-            },
-            {
-              "type": "BUTTONS",
-              "buttons": [
-                {
-                  "type": "URL",
-                  "text": "Shop Now",
-                  "url": f"{url[3]}"}
-              ]
-            }
-          ]
-        }
-        ]
-        }
-    elif url_count == 3:
-        response = {
-      "type": "CAROUSEL",
-      "cards": [
-        {
-          "components": [
-            {
-              "type": "HEADER",
-              "format": f"{names[0]}",
-              "example": {
-                "header_handle": [f"{image_ids[0]}"]
-              }
-            },
-            {
-              "type": "BODY",
-              "text": f"{s_descriptions[0]}"
-            },
-            {
-              "type": "BUTTONS",
-              "buttons": [
-                {
-                  "type": "URL",
-                  "text": "Shop Now",
-                  "url": f"{url[0]}"}
-              ]
-            }
-          ]
-        },
-
-        {
-          "components": [
-            {
-              "type": "HEADER",
-              "format": f"{names[1]}",
-              "example": {
-                "header_handle": [f"{image_ids[1]}"]
-              }
-            },
-            {
-              "type": "BODY",
-              "text": f"{s_descriptions[1]}"
-            },
-            {
-              "type": "BUTTONS",
-              "buttons": [
-                {
-                  "type": "URL",
-                  "text": "Shop Now",
-                  "url": f"{url[1]}"}
-              ]
-            }
-          ]
-        },
-
-        {
-          "components": [
-            {
-              "type": "HEADER",
-              "format": f"{names[2]}",
-              "example": {
-                "header_handle": [f"{image_ids[2]}"]
-              }
-            },
-            {
-              "type": "BODY",
-              "text": f"{s_descriptions[2]}"
-            },
-            {
-              "type": "BUTTONS",
-              "buttons": [
-                {
-                  "type": "URL",
-                  "text": "Shop Now",
-                  "url": f"{url[2]}"}
-              ]
-            }
-          ]
-        }
-        ]
-        }
-    elif url_count == 2:
-        response = {
-      "type": "CAROUSEL",
-      "cards": [
-        {
-          "components": [
-            {
-              "type": "HEADER",
-              "format": f"{names[0]}",
-              "example": {
-                "header_handle": [f"{image_ids[0]}"]
-              }
-            },
-            {
-              "type": "BODY",
-              "text": f"{s_descriptions[0]}"
-            },
-            {
-              "type": "BUTTONS",
-              "buttons": [
-                {
-                  "type": "URL",
-                  "text": "Shop Now",
-                  "url": f"{url[0]}"}
-              ]
-            }
-          ]
-        },
-
-        {
-          "components": [
-            {
-              "type": "HEADER",
-              "format": f"{names[1]}",
-              "example": {
-                "header_handle": [f"{image_ids[1]}"]
-              }
-            },
-            {
-              "type": "BODY",
-              "text": f"{s_descriptions[1]}"
-            },
-            {
-              "type": "BUTTONS",
-              "buttons": [
-                {
-                  "type": "URL",
-                  "text": "Shop Now",
-                  "url": f"{url[1]}"}
-              ]
-            }
-          ]
-        }
-        ]
-        }
-    elif url_count == 1:
-        response = {
-      "type": "CAROUSEL",
-      "cards": [
-        {
-          "components": [
-            {
-              "type": "HEADER",
-              "format": f"{names[0]}",
-              "example": {
-                "header_handle": [f"{image_ids[0]}"]
-              }
-            },
-            {
-              "type": "BODY",
-              "text": f"{s_descriptions[0]}"
-            },
-            {
-              "type": "BUTTONS",
-              "buttons": [
-                {
-                  "type": "URL",
-                  "text": "Shop Now",
-                  "url": f"{url[0]}"}
-                  ]
-                }
-              ]
-            }
-          ]
-        }
-    else:
-        response = "error: No URLs found or number of URLs is unsupported."
-    print(response)
-
+    for i in range(len(numbers)):
+        if i < len(records):
+            if len(records[i]) > 1:
+                urls.append(records[i][1])
+                names.append(records[i][3])
+            pass
+        else:
+            print(f"Index {i} is out of range for records.")
     
-    url = f'https://graph.facebook.com/{WHATSAPP_VERSION}/{phone_number_id}/messages'
-    headers = {
+    print("URLs", urls)
+    print("Names", names)
+    print("image files", image_files)
+
+    image_ids = await upload_files(image_files, phone_number_id)
+
+    print("Image IDs: ", image_ids)
+
+    cards = []
+    for i in range(len(numbers)):
+        card2 = {
+        "card_index": i,
+        "components": [
+        {
+            "type": "HEADER",
+            "parameters": [
+            {
+                "type": "IMAGE",
+                "image": {
+                "id": f"{image_ids[i]}"
+                }
+            }
+            ]
+        },
+        {
+            "type": "BODY",
+            "parameters": [
+            {
+                "type": "text",
+                "text": f"{names[i]}"
+            }
+            ]
+        },
+        {
+            "type": "BUTTON",
+            "sub_type": "URL",
+            "index": "BUTTON_INDEX",
+            "parameters": [
+            {
+                "type": "PAYLOAD",
+                "payload": "product_123"
+                },
+                {
+                "type": "URL",
+                "value": f"{urls[i]}"
+                }
+                ]
+                }
+            ]
+        }
+        cards.append(card2)
+
+    response = {
+        "type": "CAROUSEL",
+        "cards": cards
+    }
+
+    url1 = f'https://graph.facebook.com/{WHATSAPP_VERSION}/{phone_number_id}/message_templates'
+    headers1 = {
         'Content-Type': 'application/json',
         'Authorization': f'Bearer {WHATSAPP_TOKEN}'
     }
-    data = {
+
+    numbers = [1, 2, 3, 4, 5, 6, 7, 8 , 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+
+    carousel_id = round(int(random.choice(numbers))*float(time.time())/int(random.choice(numbers)))
+
+    data1 = {
         "messaging_product": "whatsapp",
         "recipient_type": "individual",
-        "to": f"{phone_number}",
+        "to": phone_number,
         "type": "template",
         "template": {
-          "name": "summer_carousel_promo_2023",
-          "language": {
-            "code": "en_US"
-          },
-          "components": [
-            {
-              "type": "BODY",
-              "parameters": [
-                {
-                  "type": "TEXT",
-                  "text": "20OFF"
-                },
-                {
-                  "type": "TEXT",
-                  "text": "20%"
-                }
-              ]
+            "name": f"carousel-{carousel_id}",
+            "language": {
+                "code": "en_US"
             },
-          response
-    ]
-  }
-}
+            "components": [
+                {
+                    "type": "BODY",
+                    "parameters": [
+                        {
+                            "type": "TEXT",
+                            "text": "20OFF"
+                        },
+                        {
+                            "type": "TEXT",
+                            "text": "20%"
+                        }
+                    ]
+                },
+                response,
+            ]
+        }
+    }
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
 
-    api_response = requests.post(url, headers=headers, data=data)
+    session = aiohttp.ClientSession()
 
-    return api_response.json()
+    async with session.post(url1, headers=headers1, json=data1, ssl_context=ssl_context) as response:
+        return await response.json()
