@@ -5,22 +5,14 @@ import tracemalloc
 import json
 import os
 import requests
-from flask import Flask, jsonify, request, make_response
 from openai import OpenAI
 import asyncio
-import certifi
-import aiohttp
 from aiohttp import web
-import ssl
 from threading import Lock
-
-# session = aiohttp.ClientSession(connector=aiohttp.TCPConnector(ssl_context=certifi.where()))
 
 from interactObjects.interact import Interact
 from interactObjects.processDocs import ProcessDocs
 from interactObjects.whatsappInteract import WhatsAppHandler
-
-# app = Flask(__name__)
 
 load_vars()
 
@@ -306,11 +298,11 @@ async def webhook(request):
 
 
 def home():
-    return jsonify({
+    return {
         'success': True,
         'status': 'healthy',
         'error': None
-    })
+    }
 
 tracemalloc.start()
 
