@@ -1,50 +1,22 @@
-from load_env import load_vars
-import os
 import re
 
-import certifi
-import ssl
-import aiohttp
-import asyncio
-from io import BytesIO
-from openai import OpenAI
-
+from load_env import load_vars
 from responseComponents import audioResponse, card, carousel, text, emojiReaction, ctaURL
 
 load_vars()
 
-WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
-WHATSAPP_VERSION = os.getenv("WHATSAPP_VERSION")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-AIRTABLE_API_KEY = os.getenv("AIRTABLE_API_KEY")
-
-
-client = OpenAI(api_key=OPENAI_API_KEY)
-
 
 class WhatsAppHandler:
 
-    def __init__(self, assistant_text, WHATSAPP_TOKEN, WHATSAPP_VERSION, phone_number_id, user_name, client, phone_number, message_id):
-        self.session = aiohttp.ClientSession()
-        self.WHATSAPP_TOKEN = WHATSAPP_TOKEN
-        self.WHATSAPP_VERSION = WHATSAPP_VERSION
+    def __init__(self, assistant_text, phone_number_id, phone_number, message_id):
         self.phone_number_id = phone_number_id
-        self.client = client
-        self.user_name = user_name
         self.phone_number = phone_number
         self.assistant_text = assistant_text
         self.message_id = message_id
-        self.session = aiohttp.ClientSession(
-            connector=aiohttp.TCPConnector(
-                ssl=ssl.create_default_context(cafile=certifi.where())
-            )
-        )
 
-    
-    async def close_session(self):
-        await self.session.close()
+
   
-    async def send_whatsapp_message(self):
+    async def message_wa(self):
         print(self.assistant_text)
         # Define the regular expression pattern to find the end message
         pattern = r'\s*OUTPUT TYPE:\s*\'([^\']+)\'$'
@@ -63,11 +35,8 @@ class WhatsAppHandler:
                 "audio": audioResponse.audioMessage,
                 "carousel": carousel.carousel,
                 "ctaURL": ctaURL.cta_url,
-                # "flow": flows,
                 "card": card.card,
-                "emoji_react": emojiReaction.emojiReaction,
-                # "location": location.send_location,
-                # "markAsRead": markAsRead
+                "emoji_react": emojiReaction.emojiReaction
             }
 
             # Get the corresponding function based on output_type
@@ -78,11 +47,8 @@ class WhatsAppHandler:
                 "audio": (ai_output, self.phone_number, self.phone_number_id),
                 "carousel": (ai_output, self.phone_number, self.phone_number_id),
                 "ctaURL": (ai_output, self.phone_number, self.phone_number_id),
-                # "flow": flows,
                 "card": (ai_output, self.phone_number, self.phone_number_id),
                 "emoji_react": (ai_output, self.phone_number, self.phone_number_id, self.message_id),
-                # "location": (ai_output, self.phone_number, self.phone_number_id),
-                # "markAsRead": markAsRead
             }
 
             args = args_mapping.get(str(output_type))
@@ -92,14 +58,10 @@ class WhatsAppHandler:
                 return await post_function(*args)
             else:
                 # Default action or error handling
-                response = {"message": "no message"}
-                async with self.session.post(url="https://api.whatsapp.com/send_default", json=response) as resp:
-                    return await resp.json()
+                raise ValueError("Unable to trigger any post funtion")
                 
         else:
             # Default action or error handling
-            response = {"message": "no message"}
-            async with self.session.post(url="https://api.whatsapp.com/send_default", json=response) as resp:
-                return await resp.json()
+            raise ValueError("No match. OUTPUT TYPE not found.")
 
 

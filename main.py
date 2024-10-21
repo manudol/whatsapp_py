@@ -1,5 +1,5 @@
 from load_env import load_vars
-from save_img import execute_download
+# from save_img import execute_download
 import tracemalloc
 
 import json
@@ -8,7 +8,6 @@ import requests
 from openai import OpenAI
 import asyncio
 from aiohttp import web
-from threading import Lock
 
 from interactObjects.interact import Interact
 from interactObjects.processDocs import ProcessDocs
@@ -16,14 +15,12 @@ from interactObjects.whatsappInteract import WhatsAppHandler
 
 load_vars()
 
-execute_download()
+# execute_download()
 
-processing_lock = Lock()
 
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 WHATSAPP_VERSION = os.getenv("WHATSAPP_VERSION")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-AIRTABLE_API_KEY = os.getenv("AIRTABLE_API_KEY")
 WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN")
 
 client = OpenAI(api_key=OPENAI_API_KEY)
@@ -78,10 +75,10 @@ async def webhook(request):
                user_message = body['entry'][0]['changes'][0]['value']['messages'][0]['text']['body']
 
 
-               interact = Interact(phone_number, phone_number_id, client, WHATSAPP_VERSION, WHATSAPP_TOKEN, user_name)
+               interact = Interact(phone_number, phone_number_id, client, user_name)
 
 
-               assistant_response = interact.interact_w_ass1(payload={
+               assistant_response = interact.messageAI(payload={
                     "type": "text",
                     "text": user_message
                })
@@ -89,19 +86,17 @@ async def webhook(request):
 
                print("Assistant Response: ", assistant_response)
 
-               whatsapp = WhatsAppHandler(assistant_response, WHATSAPP_TOKEN, WHATSAPP_VERSION, phone_number_id, user_name, client, phone_number, message_id)
+               whatsapp = WhatsAppHandler(assistant_response, phone_number_id, phone_number, message_id)
                
-               # Acquire lock to ensure single processing
-               if processing_lock.acquire(blocking=False):
-                    try:
-                        await whatsapp.send_whatsapp_message()
-                    except Exception as e:
-                        return web.json_response({"status": "error", "message": str(e)}, status=500)
-                    finally:
-                        processing_lock.release()
-                        await whatsapp.close_session()
-               else:
-                    return web.json_response({"status": "already processing"}, status=202)
+               try:
+                   await whatsapp.message_wa()
+                   return web.json_response({"status": "already processing"}, status=202)
+               
+               except ValueError as err:
+                    print(err.args)
+                    return web.json_response({"status": f"{err}"}, status=400)
+                   
+                    
 
 
 
@@ -298,11 +293,11 @@ async def webhook(request):
 
 
 def home():
-    return {
+    return web.json_response({
         'success': True,
         'status': 'healthy',
         'error': None
-    }
+    })
 
 tracemalloc.start()
 

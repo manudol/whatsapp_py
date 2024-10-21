@@ -1,12 +1,6 @@
 import os
 import time
-import json
-import requests
 import shelve
-
-import aiohttp
-import ssl
-import certifi
 
 from openai import OpenAI
 from prompts import system_prompt
@@ -16,8 +10,6 @@ from load_env import load_vars
 load_vars()
 
 openai_api_key = os.getenv("OPENAI_API_KEY")
-# airtable_api_key = os.getenv("AIRTABLE_API_KEY")
-
 
 client = OpenAI(api_key=openai_api_key)
         
@@ -25,26 +17,13 @@ client = OpenAI(api_key=openai_api_key)
 # Interact class to manage interactions
 class Interact:
 
-    def __init__(self, phone_number, phone_number_id, client, WHATSAPP_VERSION, WHATSAPP_TOKEN, user_name):
+    def __init__(self, phone_number, phone_number_id, client, user_name):
         self.phone_number_id = phone_number_id
         self.client = client
         self.user_name = user_name
         self.phone_number = phone_number
-        # self.airtable_api_key = airtable_api_key
-        self.WHATSAPP_VERSION = WHATSAPP_VERSION
-        self.WHATSAPP_TOKEN = WHATSAPP_TOKEN
-        # self.assistant_id = None
-        # self.thread_id = None
         self.initialize_assistant()
-        self.session = aiohttp.ClientSession(
-            connector=aiohttp.TCPConnector(
-                ssl=ssl.create_default_context(cafile=certifi.where())
-            )
-        )
 
-    
-    async def close_session(self):
-        await self.session.close()
 
     
     def initialize_assistant(self):
@@ -69,7 +48,7 @@ class Interact:
             
 
         
-    # Thread management
+    # Threads management
 
     def check_if_thread_exists(self):
         with shelve.open("threads_db") as threads_shelf:
@@ -81,7 +60,7 @@ class Interact:
             threads_shelf[self.phone_number] = thread_id
 
     
-    # Assistant management
+    # Assistants management
 
     def check_if_assistant_exists(self):
         with shelve.open("assistants_db") as assistants_shelf:
@@ -96,41 +75,11 @@ class Interact:
 
 
     def create_assistant(self):
-        # Create a vector store caled "Financial Statements"
-        vector_store = client.beta.vector_stores.create(name="Farmapiel Vector Store")
-
-        # Ready the files for upload to OpenAI 
-        file_paths = ["./databases/farmapiel_shipping_return_policy.docx", 
-                    "./databases/farmapiel_privacy_policy.docx", 
-                    "./databases/farmapiel_terms_of_service.docx", 
-                    "./databases/customer_service.pdf", 
-                    "./databases/farmapiel_product_list.docx"]
-        file_streams = [open(path, "rb") for path in file_paths]
-
-        # Use the upload and poll SDK helper to upload the files, add them to the vector store,
-        # and poll the status of the file batch for completion.
-        file_batch = client.beta.vector_stores.file_batches.upload_and_poll(
-        vector_store_id=vector_store.id, files=file_streams
-        )
-
-        # You can print the status and the file counts of the batch to see the result of this operation. 
-        print(file_batch.status)
-        print(file_batch.file_counts)
-
     # Then reference the collected file IDs
         assistant = client.beta.assistants.create(
             instructions=system_prompt,
-            model="gpt-4o",
-            tools=[
-                {
-                    "type": "file_search"
-                },
-            ],
-            tool_resources={
-            "file_search": {
-                "vector_store_ids": [vector_store.id]
-            }
-            })
+            model="gpt-4o-mini",
+            )
 
         assistant_id = assistant.id
 
@@ -146,64 +95,44 @@ class Interact:
     
     
     
-    def interact_w_ass1(self, payload):
+    def messageAI(self, payload):
         message_type = payload["type"]
         user_message = payload["text"]
         result = self.initialize_assistant()
         if "assistant_id" in result:
             assistant_id = result["assistant_id"]
             thread_id = result["thread_id"]
+
             client.beta.threads.messages.create(
                 thread_id=thread_id,
                 role="user",
-                content=f"Information about the message from the user: {message_type}, And the actual user_message: {user_message}"
+                content=f"Information on user_message: {message_type}, user_message: {user_message}"
             )
 
-            run = client.beta.threads.runs.create(
+            run = client.beta.threads.runs.create_and_poll(
                 thread_id=thread_id,
                 assistant_id=assistant_id
             )
-            run_id = run.id
             
-            start_time = time.time()
-            while time.time() - start_time < 30:
-                run_status = client.beta.threads.runs.retrieve(
-                    thread_id=thread_id,
-                    run_id=run_id
-                )
-                print("Checking run status:", run_status.status)
-        
-                if run_status.status == 'completed':
-                    messages = client.beta.threads.messages.list(thread_id=thread_id)
-                    message_content = messages.data[0].content[0].text
-                    # Remove annotations
-                    annotations = message_content.annotations
-                    for annotation in annotations:
-                        message_content.value = message_content.value.replace(annotation.text, '')
-                    print("Run completed, returning response")
-                    print("Response:", message_content.value)
-                    response = message_content.value
-        
-                    return response
-                else:
-                    time.sleep(1)  # Add a small delay to avoid spamming the API
+    
+            if run.status == 'completed':
+                messages = client.beta.threads.messages.list(thread_id=thread_id)
+                message_content = messages.data[0].content[0].text
+                # Remove annotations
+                annotations = message_content.annotations
+                for annotation in enumerate(annotations):
+                    message_content.value = message_content.value.replace(annotation.text, '')
+                print("Run completed, returning response")
+                print("Response:", message_content.value)
+                response = message_content.value
+
+                return response
+            
             else:
-                print("Run not completed in time, restarting function")
-                return 400
+                time.sleep(1)  # Add a small delay to avoid spamming the API
+        else:
+            print("Run not completed in time, restarting function")
+            return 400
+        
 
-
-    
-    
-            
-            
-
-
-
-
-"""
-# Example usage
-phone_number = "123-456-7890"
-interaction = Interact(phone_number)
-print(f"Assistant ID: {interaction.assistant_id}")
-print(f"Thread ID: {interaction.thread_id}")
-"""
+        
