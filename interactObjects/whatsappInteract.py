@@ -23,7 +23,8 @@ class WhatsAppHandler:
         
         # Search for the pattern in the text
         match = re.search(pattern, str(self.assistant_text), re.IGNORECASE)
-        
+        print("Match/output type: ", match)
+
         # If a match is found, extract the output type and remove it from the text
         if match:
             output_type = match.group(1).lower()  # Extract and lowercase the output type

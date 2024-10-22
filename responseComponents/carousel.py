@@ -66,7 +66,7 @@ async def upload_files(file_list, phone_number_id):
     
 
 
-async def carousel123(assistant_text, phone_number_id, phone_number):
+async def carousel(assistant_text, phone_number_id, phone_number):
     print("Assistant text received for carousel: ", assistant_text)
 
     numbers = re.findall(r'\[(\d+)\]', assistant_text)

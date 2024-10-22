@@ -6,7 +6,6 @@ import json
 import os
 import requests
 from openai import OpenAI
-import asyncio
 from aiohttp import web
 
 from interactObjects.interact import Interact
