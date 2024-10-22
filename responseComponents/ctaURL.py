@@ -106,4 +106,4 @@ async def cta_url(assistant_text, phone_number, phone_number_id):
     session = aiohttp.ClientSession()
 
     async with session.post(url, headers=headers, json=data, ssl_context=ssl_context) as response:
-        return await response.json()
+        return await response.json(), await session.close()

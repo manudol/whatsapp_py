@@ -8,27 +8,26 @@ load_vars()
 
 class WhatsAppHandler:
 
-    def __init__(self, assistant_text, phone_number_id, phone_number, message_id):
+    def __init__(self, phone_number_id, phone_number, message_id):
         self.phone_number_id = phone_number_id
         self.phone_number = phone_number
-        self.assistant_text = assistant_text
         self.message_id = message_id
 
 
   
-    async def message_wa(self):
-        print(self.assistant_text)
+    async def message_wa(self, assistant_text):
+        print(assistant_text)
         # Define the regular expression pattern to find the end message
         pattern = r'\s*OUTPUT TYPE:\s*\'([^\']+)\'$'
         
         # Search for the pattern in the text
-        match = re.search(pattern, str(self.assistant_text), re.IGNORECASE)
+        match = re.search(pattern, str(assistant_text), re.IGNORECASE)
         print("Match/output type: ", match)
 
         # If a match is found, extract the output type and remove it from the text
         if match:
             output_type = match.group(1).lower()  # Extract and lowercase the output type
-            ai_output = re.sub(pattern, '', str(self.assistant_text), flags=re.IGNORECASE)  # Remove the pattern from the text
+            ai_output = re.sub(pattern, '', str(assistant_text), flags=re.IGNORECASE)  # Remove the pattern from the text
             print("New reformatted text: ", ai_output)
             print(output_type)
             output_type_mapping = {

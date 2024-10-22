@@ -202,4 +202,4 @@ async def carousel(assistant_text, phone_number_id, phone_number):
     session = aiohttp.ClientSession()
 
     async with session.post(url1, headers=headers1, json=data1, ssl_context=ssl_context) as response:
-        return await response.json()
+        return await response.json(), await session.close()

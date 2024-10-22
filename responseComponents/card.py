@@ -68,4 +68,4 @@ async def card(assistant_text, phone_number, phone_number_id):
         }
 
         async with session.post(url, headers=headers, json=data) as response:
-            return await response.json()
+            return await response.json(), await session.close()

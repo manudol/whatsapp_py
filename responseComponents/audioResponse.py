@@ -65,4 +65,4 @@ async def audioMessage(assistant_text, phone_number, phone_number_id):
             # Send the audio message
             data["audio"] = {"id": audio_id}
             async with session.post(url2, headers=headers2, json=data) as response:
-                return await response.json()
+                return await response.json(), await session.close()

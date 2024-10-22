@@ -22,6 +22,7 @@ WHATSAPP_VERSION = os.getenv("WHATSAPP_VERSION")
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN")
 
+
 client = OpenAI(api_key=OPENAI_API_KEY)
 
 
@@ -68,27 +69,27 @@ async def webhook(request):
             message_id = body['entry'][0]['changes'][0]['value']['messages'][0]['id']
             print('Message ID: ', message_id)
             
+            interact = Interact(phone_number, phone_number_id, client, user_name)
+
+            whatsapp = WhatsAppHandler(phone_number_id, phone_number, message_id)
+
             #FOR TEXT
             if body['entry'][0]['changes'][0]['value']['messages'][0].get('text'):
                  
                user_message = body['entry'][0]['changes'][0]['value']['messages'][0]['text']['body']
 
 
-               interact = Interact(phone_number, phone_number_id, client, user_name)
-
-
                assistant_response = interact.messageAI(payload={
                     "type": "text",
                     "text": user_message
                })
-               
 
                print("Assistant Response: ", assistant_response)
 
-               whatsapp = WhatsAppHandler(assistant_response, phone_number_id, phone_number, message_id)
+               
                
                try:
-                   await whatsapp.message_wa()
+                   await whatsapp.message_wa(assistant_response)
                    return web.json_response({"status": "already processing"}, status=202)
                
                except ValueError as err:
@@ -102,6 +103,7 @@ async def webhook(request):
             #FOR AUDIO
             elif body['entry'][0]['changes'][0]['value']['messages'][0].get('audio'):
                 if body['entry'][0]['changes'][0]['value']['messages'][0]['audio'].get('voice'):
+                    print("Audio response received!\n")
                     media_url_response = requests.get(
                         f"https://graph.facebook.com/{WHATSAPP_VERSION}/{body['entry'][0]['changes'][0]['value']['messages'][0]['audio']['id']}",
                         headers={
@@ -109,7 +111,28 @@ async def webhook(request):
                             'Authorization': f'Bearer {WHATSAPP_TOKEN}',
                         }
                     )
+                    # ... You left here ...
+                    print("Media url api response: ", media_url_response) # Problem with API call
+
+                    """
+                    Error message ⬆️:
+                    Audio response received!
+
+                    Media url api response:  <Response [401]>
+                    Error handling request
+                    Traceback (most recent call last):
+                    File "/Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/site-packages/aiohttp/web_protocol.py", line 452, in _handle_request
+                        resp = await request_handler(request)
+                    File "/Library/Frameworks/Python.framework/Versions/3.9/lib/python3.9/site-packages/aiohttp/web_app.py", line 543, in _handle
+                        resp = await handler(request)
+                    File "/Users/manudolbec/whatsapp_py/main.py", line 117, in webhook
+                        media_url = media_url_response.json()['url']
+                    KeyError: 'url'
+                    """
+
                     media_url = media_url_response.json()['url']
+
+                    print("Media url: ", media_url)
 
                     rnd_file_name = f"audio_{os.urandom(8).hex()}.ogg"
                     audio_response = requests.get(media_url, headers={'Authorization': f'Bearer {WHATSAPP_TOKEN}'}, stream=True)
@@ -118,31 +141,36 @@ async def webhook(request):
                         for chunk in audio_response.iter_content(chunk_size=8192):
                             f.write(chunk)
 
-                    # Assuming openai is set up correctly
+                    
                     
                     transcription = client.audio.transcriptions.create(
                         model="whisper-1",
-                        file=open(rnd_file_name, 'rb')
+                        file=open(rnd_file_name, 'rb'),
+                        response_format="text"
                     )
                     audio_transcript = transcription.text
 
-                    interact = Interact(phone_number, phone_number_id, client, WHATSAPP_VERSION, WHATSAPP_TOKEN, user_name)
-
                     
-                    if audio_transcript:
-                        assistant_response = interact.interact_w_ass1(
-                            payload={
-                                'type': 'audio',
-                                'payload': audio_transcript,
-                            }
-                        )
+                    assistant_response = interact.messageAI(
+                        payload={
+                            'type': 'audio',
+                            'payload': audio_transcript,
+                        }
+                    )
+                    
+                    
+                    try:
+                        await whatsapp.message_wa(assistant_response)
+                        return web.json_response({"status": "already processing"}, status=202)
+            
+                    except ValueError as err:
+                        print(err.args)
+                        return web.json_response({"status": f"{err}"}, status=400)
                         
-                        whatsapp = WhatsAppHandler(assistant_response, WHATSAPP_TOKEN, WHATSAPP_VERSION, phone_number_id, user_name, client, phone_number, message_id)
 
-                        response = await whatsapp.send_whatsapp_message()
-                        await whatsapp.close_session()
-                        return web.json_response({"response": f"{response}","status": "success"})
-
+            
+            
+            
             # FOR IMAGE
             elif body['entry'][0]['changes'][0]['value']['messages'][0].get('image'):
                 if body['entry'][0]['changes'][0]['value']['messages'][0]['type'] == 'image':
