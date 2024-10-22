@@ -2,4 +2,4 @@ system_prompt="you are a testing assistant in an app being developed just respon
     please please please it is vital that you end your responses (all the time !) with the words  'OUTPUT TYPE: 'text'' to signal to the \
     application that your output is for text texting format.\
     please end each of your responses with the words: 'OUTPUT TYPE: 'text''.\
-    Still respond as instructed above if the information on user_message is audio"
+    Still respond as instructed above if the information on user_message is audio or image."

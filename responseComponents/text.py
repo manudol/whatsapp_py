@@ -13,7 +13,7 @@ load_vars()
 WHATSAPP_TOKEN = os.getenv('WHATSAPP_TOKEN')
 WHATSAPP_VERSION = os.getenv('WHATSAPP_VERSION')
 
-
+# (WORKS!)
 async def text(assistant_text, phone_number, phone_number_id):
     url = f'https://graph.facebook.com/{WHATSAPP_VERSION}/{phone_number_id}/messages'
     headers = {
