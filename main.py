@@ -297,7 +297,7 @@ async def webhook(request):
                     payload={
                         "type": "from_ads",
                         "content": f"Greet customer that cliecked on advertisement. \
-                            Advertisement information: Source url of the post the customer came from: {source_url},\ 
+                            Advertisement information: Source url of the post the customer came from: {source_url},\
                             Source type: {source_type}, Source ID: {source_id}, \
                                 Headline of the ad: {headline}, \
                                     Ad body: {ad_body}, \
@@ -364,9 +364,6 @@ app = web.Application()
 app.add_routes([web.get('/webhook', get_verify)])
 app.add_routes([web.post('/webhook', webhook)])
 app.add_routes([web.get('/', home)])
-
-
-# asyncio.run(main())
 
 
 if __name__ == '__main__':
