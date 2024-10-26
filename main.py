@@ -2,7 +2,6 @@ from load_env import load_vars
 # from save_img import execute_download
 import tracemalloc
 
-import json
 import os
 import base64
 import requests
@@ -49,6 +48,10 @@ async def webhook(request):
     body = await request.json()
     object = body.get('object')
     if object:
+        # Check if body is a read confirmation or not:
+        is_a_read_confirm = body.get('entry', [])[0].get('changes', [])[0].get('value', {}).get('statuses', []).get('status', {})
+        if is_a_read_confirm: return 0
+        
         # IF MESSAGE DOES NOT COME FROM BUTTON
         is_not_interactive = body.get('entry', [])[0].get('changes', [])[0].get('value', {}).get('messages', [])
         
@@ -89,7 +92,7 @@ async def webhook(request):
                
                
                try:
-                   await whatsapp.message_wa(assistant_response)
+                   await whatsapp.message_wa(assistant_response, user_message)
                    return web.json_response({"status": "already processing"}, status=202)
                
                except ValueError as err:

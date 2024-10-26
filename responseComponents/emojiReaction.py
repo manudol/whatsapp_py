@@ -52,8 +52,7 @@ async def emojiReaction(assistant_text, phone_number, phone_number_id, message_i
         "emoji": emoji_reaction
       }
     }
-
-    print(data)
+    
     
     ssl_context = ssl.create_default_context(cafile=certifi.where())
 

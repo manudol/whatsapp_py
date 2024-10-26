@@ -32,7 +32,7 @@ async def audioMessage(assistant_text, phone_number, phone_number_id):
     headers = {
         'Authorization': f'Bearer {WHATSAPP_TOKEN}',
     }
-    # Make sure the file exists and is opened in binary mode
+    
     ssl_context = ssl.create_default_context(cafile=certifi.where())
     async with aiohttp.ClientSession() as session:
         with open(speech_file_path, 'rb') as f:
@@ -40,7 +40,7 @@ async def audioMessage(assistant_text, phone_number, phone_number_id):
             form_data = aiohttp.FormData()
             form_data.add_field('messaging_product', 'whatsapp')
             form_data.add_field('type', 'audio/mpeg')
-            form_data.add_field('file', f, filename="txt2speech_92f2c409cc1622de.mp3", content_type='audio/mpeg')
+            form_data.add_field('file', f, filename=speech_file_path, content_type='audio/mpeg')
             
             async with session.post(url, headers=headers, data=form_data, ssl_context=ssl_context) as response:
                 response_data = await response.json()

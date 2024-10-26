@@ -1,7 +1,7 @@
 import re
 
 from load_env import load_vars
-from responseComponents import audioResponse, card, carousel, text, emojiReaction, ctaURL
+from responseComponents import audioResponse, buttonReply, text, emojiReaction
 
 load_vars()
 
@@ -15,7 +15,7 @@ class WhatsAppHandler:
 
 
   
-    async def message_wa(self, assistant_text):
+    async def message_wa(self, assistant_text, user_message):
         print(assistant_text)
         # Define the regular expression pattern to find the end message
         pattern = r'\s*OUTPUT TYPE:\s*\'([^\']+)\'$'
@@ -33,9 +33,7 @@ class WhatsAppHandler:
             output_type_mapping = {
                 "text": text.text,
                 "audio": audioResponse.audioMessage,
-                "carousel": carousel.carousel,
-                "ctaURL": ctaURL.cta_url,
-                "card": card.card,
+                "button_reply": buttonReply.buttonReply,
                 "emoji_react": emojiReaction.emojiReaction
             }
 
@@ -45,9 +43,7 @@ class WhatsAppHandler:
             args_mapping = {
                 "text": (ai_output, self.phone_number, self.phone_number_id),
                 "audio": (ai_output, self.phone_number, self.phone_number_id),
-                "carousel": (ai_output, self.phone_number, self.phone_number_id),
-                "ctaURL": (ai_output, self.phone_number, self.phone_number_id),
-                "card": (ai_output, self.phone_number, self.phone_number_id),
+                "button_reply": (ai_output, self.phone_number, self.phone_number_id, user_message, output_type),
                 "emoji_react": (ai_output, self.phone_number, self.phone_number_id, self.message_id),
             }
 
