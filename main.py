@@ -49,8 +49,8 @@ async def webhook(request):
     object = body.get('object')
     if object:
         # Check if body is a read confirmation or not:
-        is_a_read_confirm = body.get('entry', [])[0].get('changes', [])[0].get('value', {}).get('statuses', []).get('status', {})
-        if is_a_read_confirm: return 0
+        # is_a_read_confirm = body.get('entry', [])[0].get('changes', [])[0].get('value', {}).get('statuses', []).get('status', {})
+        # if is_a_read_confirm: return 0
         
         # IF MESSAGE DOES NOT COME FROM BUTTON
         is_not_interactive = body.get('entry', [])[0].get('changes', [])[0].get('value', {}).get('messages', [])
@@ -315,33 +315,36 @@ async def webhook(request):
                     print(err.args)
                     return web.json_response({"status": f"{err}"}, status=400)
             else:
-                print("Message type not authorized by the system.")
-                return web.json_response({'message': 'Unauthorized message.'})    
+                # FOR INTERACTIVE MESSASGES REPLIES
+                interactive_msg = body['entry'][0]['changes'][0]['value']['messages'][0].get('interactive')
+
+
+                # (WORKS)
+                # FOR BUTTON REPLIES
+                if interactive_msg and 'button_reply' in interactive_msg:
+                    
+                    assistant_response = interact.messageAI(
+                        payload={
+                            'type': "button_reply",
+                            'text': f"Customer clicked on buttons choice: {interactive_msg['button_reply']['title']}"
+                            })
+                    
+                    user_message = interactive_msg['button_reply']['title']
+
+                    try:
+                        await whatsapp.message_wa(assistant_response, user_message)
+                        return web.json_response({"status": "already processing"}, status=202)
+                    
+                    except ValueError as err:
+                        print(err.args)
+                        return web.json_response({"status": f"{err}"}, status=400)
+                else:
+                    print("Message type not authorized by the system.")
+                    return web.json_response({'message': 'Unauthorized message.'})    
 
         else:
-            # FOR INTERACTIVE MESSASGES REPLIES
-            interactive_msg = body['entry'][0]['changes'][0]['value']['messages'][0].get('interactive')
-
-
-            # FOR BUTTON REPLIES
-            if interactive_msg and 'button_reply' in interactive_msg:
-                # button_reply_id = interactive_msg['button_reply']['id']
-                assistant_response = interact.messageAI(
-                    payload={
-                        'type': "button_reply",
-                        'text': interactive_msg['button_reply']['title']
-                        })
-                
-                try:
-                    await whatsapp.message_wa(assistant_response)
-                    return web.json_response({"status": "already processing"}, status=202)
-                        
-                except ValueError as err:
-                    print(err.args)
-                    return web.json_response({"status": f"{err}"}, status=400)
-
-
-            return web.json_response({'message': 'ok'})
+            print("Message type not authorized by the system.")
+            return web.json_response({'message': 'Unauthorized message.'})    
     else:
         return web.json_response({'message': 'error | unexpected body'}, status=400)
 

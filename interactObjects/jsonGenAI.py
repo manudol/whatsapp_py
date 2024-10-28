@@ -37,7 +37,8 @@ class GenAIjson():
                         content that is used to create interactive response componenets in whatsapp\
                         follow the json generation method\
                         this is job where you need to follow the instruction exactly.\
-                        to generate proper json bodies for api calls.",
+                        to generate proper json bodies for api calls.\
+                        NEVER EVER surround the json body by ```json {json body} ``` triple quotes. It should just be: {json body}",
                 model="gpt-4o-mini",
                 )
 
