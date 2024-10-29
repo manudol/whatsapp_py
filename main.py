@@ -59,11 +59,11 @@ async def webhook(request):
         # Check if payload has "messages" field to confirm message type
         elif body.get('entry') and body['entry'][0].get('changes') and body['entry'][0]['changes'][0].get('value') and 'messages' in body['entry'][0]['changes'][0]['value']:
             is_message = body['entry'][0]['changes'][0]['value']['messages']
-            
         
+        print("Other body to be parsed: ", body)
         
         if is_message:
-
+            print("is message !!!!!!!!! ", is_message)
             # Customer's phone number:
             phone_number = body['entry'][0]['changes'][0]['value']['messages'][0]['from']
 
@@ -292,12 +292,38 @@ async def webhook(request):
             #         else:
             #             print(f"Failed to download document. Status code: {response.status_code}")
             #             return web.json_response({"status": "error", "message": response}, status=response.status_code)
-                
-            
+
+
+            # (WORKS!)   
+            elif body['entry'][0]['changes'][0]['value']['messages'][0].get('location'):
+                location_info = body['entry'][0]['changes'][0]['value']['messages'][0].get('location')
+                if location_info:
+                    longitude = location_info['longitude']
+                    latitude = location_info['latitude']
+
+                    user_message = f"Customer sent {longitude} and {latitude}"
+
+                    assistant_response = interact.messageAI(payload={
+                    "type": "location_send",
+                    "text": f"Customer just responded with their location:\
+                                Longitude: {longitude},\
+                                latitude: {latitude}"
+                    })
+
+
+                    print("Assistant Response: ", assistant_response)
+               
+                    try:
+                        await whatsapp.message_wa(assistant_response, user_message)
+                        return web.json_response({"status": "already processing"}, status=202)
+                    
+                    except ValueError as err:
+                            print(err.args)
+                            return web.json_response({"status": f"{err}"}, status=400)
+                    
 
             # CUSTOMER COMES FROM ADS - (SHOULD WORK!)
             elif body['entry'][0]['changes'][0]['value']['messages'][0].get('referral'):
-                
                 # COLLECT DATA ON AD POST TO BETTER CONTEXT RESPONSE
                 source_url = body['entry'][0]['changes'][0]['value']['messages'][0]['referral']['source_url']
                 source_type = body['entry'][0]['changes'][0]['value']['messages'][0]['referral']['source_type']

@@ -1,7 +1,7 @@
 import re
 
 from load_env import load_vars
-from responseComponents import audioResponse, buttonReply, text, emojiReaction
+from responseComponents import audioResponse, buttonReply, text, emojiReaction, location, sendLocation
 
 load_vars()
 
@@ -34,7 +34,9 @@ class WhatsAppHandler:
                 "text": text.text,
                 "audio": audioResponse.audioMessage,
                 "button_reply": buttonReply.buttonReply,
-                "emoji_react": emojiReaction.emojiReaction
+                "emoji_react": emojiReaction.emojiReaction,
+                "location": location.location,
+                "send_location": sendLocation.sendLocation,
             }
 
             # Get the corresponding function based on output_type
@@ -45,6 +47,8 @@ class WhatsAppHandler:
                 "audio": (ai_output, self.phone_number, self.phone_number_id),
                 "button_reply": (ai_output, self.phone_number, self.phone_number_id, user_message, output_type),
                 "emoji_react": (ai_output, self.phone_number, self.phone_number_id, self.message_id),
+                "location": (ai_output, self.phone_number, self.phone_number_id, user_message, output_type),
+                "send_location": (ai_output, self.phone_number, self.phone_number_id),
             }
 
             args = args_mapping.get(str(output_type))
