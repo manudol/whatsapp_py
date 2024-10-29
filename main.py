@@ -48,33 +48,44 @@ async def webhook(request):
     body = await request.json()
     object = body.get('object')
     if object:
-        # Check if body is a read confirmation or not:
-        # is_a_read_confirm = body.get('entry', [])[0].get('changes', [])[0].get('value', {}).get('statuses', []).get('status', {})
-        # if is_a_read_confirm: return 0
-        
-        # IF MESSAGE DOES NOT COME FROM BUTTON
-        is_not_interactive = body.get('entry', [])[0].get('changes', [])[0].get('value', {}).get('messages', [])
-        
-        # WHATSAPP BUSINESS PHONE NUMBER ID for the url Endpoint
-        phone_number_id = body['entry'][0]['changes'][0]['value']['metadata']['phone_number_id']
+        # Initialize variables to None or an empty list for safety
+        is_a_read_confirm = None
+        is_message = None
 
-        print("Phone Number ID: ", phone_number_id)
+        # Check if payload has "statuses" field to confirm read receipt
+        if body.get('entry') and body['entry'][0].get('changes') and body['entry'][0]['changes'][0].get('value') and 'statuses' in body['entry'][0]['changes'][0]['value']:
+            is_a_read_confirm = body['entry'][0]['changes'][0]['value']['statuses']
 
-        # Customer's phone number:
-        phone_number = body['entry'][0]['changes'][0]['value']['messages'][0]['from']
+        # Check if payload has "messages" field to confirm message type
+        elif body.get('entry') and body['entry'][0].get('changes') and body['entry'][0]['changes'][0].get('value') and 'messages' in body['entry'][0]['changes'][0]['value']:
+            is_message = body['entry'][0]['changes'][0]['value']['messages']
+            
+        
+        
+        if is_message:
 
-        # Customer's Whastapp User Name :
-        user_name = body['entry'][0]['changes'][0]['value']['contacts'][0]['profile']['name']
-        
-        message_id = body['entry'][0]['changes'][0]['value']['messages'][0]['id']
-        print('Message ID: ', message_id)
-        
-        interact = Interact(phone_number, phone_number_id, client, user_name)
+            # Customer's phone number:
+            phone_number = body['entry'][0]['changes'][0]['value']['messages'][0]['from']
 
-        whatsapp = WhatsAppHandler(phone_number_id, phone_number, message_id)
+            # Customer's last message id:
+            message_id = body['entry'][0]['changes'][0]['value']['messages'][0]['id']
+            print('Message ID: ', message_id)
+
+            # Customer's Whastapp User Name :
+            user_name = body['entry'][0]['changes'][0]['value']['contacts'][0]['profile']['name']
+            
+
+            
+            # WHATSAPP BUSINESS PHONE NUMBER ID for the url Endpoint
+            phone_number_id = body['entry'][0]['changes'][0]['value']['metadata']['phone_number_id']
+
+            print("Phone Number ID: ", phone_number_id)
+
+            
+            interact = Interact(phone_number, phone_number_id, client, user_name)
+
+            whatsapp = WhatsAppHandler(phone_number_id, phone_number, message_id)
         
-        
-        if is_not_interactive:
 
             #FOR TEXT (WORKS!)
             if body['entry'][0]['changes'][0]['value']['messages'][0].get('text'):
@@ -341,6 +352,11 @@ async def webhook(request):
                 else:
                     print("Message type not authorized by the system.")
                     return web.json_response({'message': 'Unauthorized message.'})    
+        
+        # (WORKS!)
+        elif is_a_read_confirm:
+            print(f"message read confirmation.")
+            return web.json_response({'status': 'read'})
 
         else:
             print("Message type not authorized by the system.")
