@@ -3,8 +3,9 @@ import time
 import shelve
 
 from openai import OpenAI
-from prompts import system_prompt
 
+from prompts import system_prompt
+from .databaseManager import DatabaseManager
 from load_env import load_vars
 
 load_vars()
@@ -15,9 +16,10 @@ client = OpenAI(api_key=openai_api_key)
         
 
 # Interact class to manage interactions
-class Interact:
+class Interact(DatabaseManager):
 
     def __init__(self, phone_number, phone_number_id, client, user_name):
+        super().__init__(phone_number, phone_number_id)
         self.phone_number_id = phone_number_id
         self.client = client
         self.user_name = user_name
@@ -45,32 +47,6 @@ class Interact:
             print(f"Retrieving existing thread {thread_id} & assistant {assistant_id} for {self.user_name} with phone number {self.phone_number}")
         
         return {"assistant_id": assistant_id, "thread_id": thread_id}
-            
-
-        
-    # Threads management
-
-    def check_if_thread_exists(self):
-        with shelve.open("threads_db") as threads_shelf:
-            return threads_shelf.get(self.phone_number, None)
-
-
-    def store_thread(self, thread_id):
-        with shelve.open("threads_db", writeback=True) as threads_shelf:
-            threads_shelf[self.phone_number] = thread_id
-
-    
-    # Assistants management
-
-    def check_if_assistant_exists(self):
-        with shelve.open("assistants_db") as assistants_shelf:
-            return assistants_shelf.get(self.phone_number, None)
-
-
-    def store_assistant(self, assistant_id):
-        with shelve.open("assistants_db", writeback=True) as assistants_shelf:
-            assistants_shelf[self.phone_number] = assistant_id
-
 
 
 

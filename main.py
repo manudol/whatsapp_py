@@ -1,10 +1,10 @@
 from load_env import load_vars
-# from save_img import execute_download
 import tracemalloc
 
 import os
-import base64
 import requests
+
+import base64
 from openai import OpenAI
 from aiohttp import web
 

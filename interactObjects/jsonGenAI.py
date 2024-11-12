@@ -1,9 +1,11 @@
 import os
 import json
 from .interact import Interact
-from openai import OpenAI
 from load_env import load_vars
 from prompts import craft_genai_prompt
+
+from openai import OpenAI
+
 
 load_vars()
 
