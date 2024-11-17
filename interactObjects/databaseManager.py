@@ -18,10 +18,9 @@ class DatabaseManager:
         self.cursor = self.conn.cursor()
     
 
-
     def check_if_thread_exists(self):
-        query = "SELECT thread_id FROM threads WHERE phone_number = %s;"
-        self.cursor.execute(query, (self.phone_number,))
+        query = "SELECT thread_id FROM threads WHERE phone_number = %s AND phone_number_id = %s;"
+        self.cursor.execute(query, (self.phone_number, self.phone_number_id))  # Match placeholders with arguments
         result = self.cursor.fetchone()
         return result[0] if result else None
 
@@ -29,19 +28,19 @@ class DatabaseManager:
 
     def store_thread(self, thread_id):
         query = """
-        INSERT INTO threads (phone_number, thread_id)
-        VALUES (%s, %s)
+        INSERT INTO threads (phone_number, thread_id, phone_number_id)
+        VALUES (%s, %s, %s)
         ON CONFLICT (phone_number) DO UPDATE
         SET thread_id = EXCLUDED.thread_id;
         """
-        self.cursor.execute(query, (self.phone_number, thread_id))
+        self.cursor.execute(query, (self.phone_number, thread_id, self.phone_number_id,))
         self.conn.commit()
 
 
 
     def check_if_assistant_exists(self):
-        query = "SELECT assistant_id FROM assistants WHERE phone_number = %s;"
-        self.cursor.execute(query, (self.phone_number,))
+        query = "SELECT assistant_id FROM assistants WHERE phone_number = %s AND phone_number_id = %s;"
+        self.cursor.execute(query, (self.phone_number, self.phone_number_id))
         result = self.cursor.fetchone()
         return result[0] if result else None
 
@@ -49,12 +48,12 @@ class DatabaseManager:
 
     def store_assistant(self, assistant_id):
         query = """
-        INSERT INTO assistants (phone_number, assistant_id)
-        VALUES (%s, %s)
+        INSERT INTO assistants (phone_number, phone_number_id, assistant_id)
+        VALUES (%s, %s, %s)
         ON CONFLICT (phone_number) DO UPDATE
         SET assistant_id = EXCLUDED.assistant_id;
         """
-        self.cursor.execute(query, (self.phone_number, assistant_id))
+        self.cursor.execute(query, (self.phone_number, self.phone_number_id, assistant_id))
         self.conn.commit()
 
 
