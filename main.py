@@ -3,48 +3,42 @@ import tracemalloc
 
 import os
 import requests
-
 import base64
-from openai import OpenAI
-from aiohttp import web
+from fastapi import FastAPI, Request, HTTPException
+from fastapi.responses import JSONResponse
 
+from openai_client.client import client
 from interactObjects.interact import Interact
-from interactObjects.processDocs import ProcessDocs
 from interactObjects.whatsappInteract import WhatsAppHandler
+from interactObjects.djangoInteract import DjangoInteract, DjangoAccess
+
 
 load_vars()
 
-# execute_download()
 
-
+BACKEND_URL = os.getenv("BACKEND_URL")
 WHATSAPP_TOKEN = os.getenv("WHATSAPP_TOKEN")
 WHATSAPP_VERSION = os.getenv("WHATSAPP_VERSION")
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 WHATSAPP_VERIFY_TOKEN = os.getenv("WHATSAPP_VERIFY_TOKEN")
 
 
-client = OpenAI(api_key=OPENAI_API_KEY)
+app = FastAPI()
 
 
-
-
-async def get_verify(request):
-    mode = request.query.get('hub.mode')
-    token = request.query.get('hub.verify_token')
-    challenge = request.query.get('hub.challenge')
-
-    if mode and token:
-        if mode == 'subscribe' and token == 'whatsapp_co123':
-            return web.Response(text=challenge)
+@app.get("/webhook")
+async def get_verify(hub_mode: str = None, hub_verify_token: str = None, hub_challenge: str = None):
+    if hub_mode and hub_verify_token:
+        if hub_mode == 'subscribe' and hub_verify_token == WHATSAPP_VERIFY_TOKEN:
+            print("WEBHOOK VERIFIED")
+            return int(hub_challenge)
         else:
-            return web.Response(status=403)
+            raise HTTPException(status_code=403)
     else:
-        return web.Response(status=400)
-    
+        raise HTTPException(status_code=400)
 
 
-
-async def webhook(request):
+@app.post("/webhook")
+async def webhook(request: Request):
     body = await request.json()
     object = body.get('object')
     if object:
@@ -69,49 +63,61 @@ async def webhook(request):
 
             # Customer's last message id:
             message_id = body['entry'][0]['changes'][0]['value']['messages'][0]['id']
-            print('Message ID: ', message_id)
 
             # Customer's Whastapp User Name :
             user_name = body['entry'][0]['changes'][0]['value']['contacts'][0]['profile']['name']
             
+            # Organisor's business id
+            business_id = body['entry'][0]['id']
 
-            
+            print("business_id: ", business_id)
+
             # WHATSAPP BUSINESS PHONE NUMBER ID for the url Endpoint
             phone_number_id = body['entry'][0]['changes'][0]['value']['metadata']['phone_number_id']
 
-            print("Phone Number ID: ", phone_number_id)
+            django_access = DjangoAccess(phone_number_id, business_id, phone_number)
 
+            ( model_id, 
+              system_prompt, 
+              thread_id, 
+              access_token, 
+              basemodel_id ) = await django_access.get_modelID_and_conversation()
             
-            interact = Interact(phone_number, phone_number_id, client, user_name)
+            print("model_id 123: ", model_id)
 
-            whatsapp = WhatsAppHandler(phone_number_id, phone_number, message_id)
-        
+
+            interact = Interact(phone_number, phone_number_id, model_id, user_name, access_token, system_prompt, thread_id)
+            whatsapp = WhatsAppHandler(phone_number_id, phone_number, message_id, access_token, business_id)
+            dj_interact = DjangoInteract(access_token, basemodel_id, model_id, phone_number, user_name, business_id, thread_id)
+
 
             #FOR TEXT (WORKS!)
             if body['entry'][0]['changes'][0]['value']['messages'][0].get('text'):
-                 
-               user_message = body['entry'][0]['changes'][0]['value']['messages'][0]['text']['body']
+                print("Text received!")
+                user_message = body['entry'][0]['changes'][0]['value']['messages'][0]['text']['body']
 
+                assistant_response = interact.messageAI(payload={
+                        "type": "text",
+                        "text": user_message
+                })
 
-               assistant_response = interact.messageAI(payload={
-                    "type": "text",
-                    "text": user_message
-               })
+                print("Assistant Response: ", assistant_response)
 
-               print("Assistant Response: ", assistant_response)
-
-               
-               
-               try:
-                   await whatsapp.message_wa(assistant_response, user_message)
-                   return web.json_response({"status": "already processing"}, status=202)
-               
-               except ValueError as err:
-                    print(err.args)
-                    return web.json_response({"status": f"{err}"}, status=400)
-                   
+                try:
+                    response = await whatsapp.message_wa(assistant_response, user_message)
+                    await dj_interact.save_messages(
+                                        user_message=response["user_message"], 
+                                        assistant_message=response["assistant_message"],
+                                        output_type=response["output_type"],
+                                        double_message=response["double_message"]
+                                        )
                     
-
+                    return JSONResponse(content={"status": "message sent", "response": response}, status_code=202)
+                
+                except ValueError as err:
+                    print(err.args)
+                    return JSONResponse(content={"status": f"{err}"}, status_code=400)
+                   
 
 
             #FOR AUDIO (WORKS!)
@@ -140,8 +146,7 @@ async def webhook(request):
                         for chunk in audio_response.iter_content(chunk_size=8192):
                             f.write(chunk)
 
-                    
-                    
+
                     transcription = client.audio.transcriptions.create(
                         model="whisper-1",
                         file=open(rnd_file_name, 'rb'),
@@ -149,7 +154,6 @@ async def webhook(request):
                     )
                     
                     os.remove(rnd_file_name)
-
                     
                     assistant_response = interact.messageAI(
                         payload={
@@ -160,14 +164,13 @@ async def webhook(request):
                     
                     try:
                         await whatsapp.message_wa(assistant_response)
-                        return web.json_response({"status": "already processing"}, status=202)
+                        return JSONResponse(content={"status": "already processing"}, status_code=202)
             
                     except ValueError as err:
                         print(err.args)
-                        return web.json_response({"status": f"{err}"}, status=400)
+                        return JSONResponse(content={"status": f"{err}"}, status_code=400)
                         
 
-            
             
             
             # FOR IMAGE (WORKS!)
@@ -245,53 +248,11 @@ async def webhook(request):
                     
                     try:
                         await whatsapp.message_wa(assistant_response)
-                        return web.json_response({"status": "already processing"}, status=202)
+                        return JSONResponse(content={"status": "already processing"}, status_code=202)
                         
                     except ValueError as err:
                         print(err.args)
-                        return web.json_response({"status": f"{err}"}, status=400)
-
-
-            # Bad idea to send it to assistant
-            # Better idea to store it in CRM
-            # FOR DOCUMENTS
-            # elif body['entry'][0]['changes'][0]['value']['messages'][0].get('document'):
-            #     document_info = body['entry'][0]['changes'][0]['value']['messages'][0].get('document')
-            #     if document_info:
-            #         document_id = document_info['id']
-            #         mime_type = document_info['mime_type']
-            #         filename = document_info['filename']
-            #         # Step 2: Download the document
-            #         document_url = f"https://graph.facebook.com/{WHATSAPP_VERSION}/{document_id}"
-            #         headers = {
-            #             'Authorization': f'Bearer {WHATSAPP_TOKEN}'
-            #         }
-            #         response = requests.get(document_url, headers=headers)
-            #         if response.status_code == 200:
-            #             with open(filename, 'wb') as file:
-            #                 file.write(response.content)
-            #             print(f"Document {filename} downloaded successfully.")
-
-            #         # Step 3: Process the document
-            #             doc_process = ProcessDocs(filename, mime_type)
-            #             file_content = doc_process.process_document(filename, mime_type)
-                        
-            #             interact = Interact(phone_number, phone_number_id, client, WHATSAPP_VERSION, WHATSAPP_TOKEN, user_name)
-
-            #             whatsapp = WhatsAppHandler(assistant_response, WHATSAPP_TOKEN, WHATSAPP_VERSION, phone_number_id, user_name, client, phone_number, message_id)
-                        
-            #             assistant_response = interact.interact_w_ass1(
-            #                 payload={
-            #                     "type": "document",
-            #                     "content": file_content,
-            #                 })
-            #             response = await whatsapp.send_whatsapp_message()
-            #             await whatsapp.close_session()
-            #             return web.json_response({"response": f"{response}","status": "success"})
-                        
-            #         else:
-            #             print(f"Failed to download document. Status code: {response.status_code}")
-            #             return web.json_response({"status": "error", "message": response}, status=response.status_code)
+                        return JSONResponse(content={"status": f"{err}"}, status_code=400)
 
 
             # (WORKS!)   
@@ -315,11 +276,11 @@ async def webhook(request):
                
                     try:
                         await whatsapp.message_wa(assistant_response, user_message)
-                        return web.json_response({"status": "already processing"}, status=202)
+                        return JSONResponse(content={"status": "already processing"}, status_code=202)
                     
                     except ValueError as err:
                             print(err.args)
-                            return web.json_response({"status": f"{err}"}, status=400)
+                            return JSONResponse(content={"status": f"{err}"}, status_code=400)
                     
 
             # CUSTOMER COMES FROM ADS - (SHOULD WORK!)
@@ -346,11 +307,11 @@ async def webhook(request):
                 
                 try:
                     await whatsapp.message_wa(assistant_response)
-                    return web.json_response({"status": "already processing"}, status=202)
+                    return JSONResponse(content={"status": "already processing"}, status_code=202)
                         
                 except ValueError as err:
                     print(err.args)
-                    return web.json_response({"status": f"{err}"}, status=400)
+                    return JSONResponse(content={"status": f"{err}"}, status_code=400)
             else:
                 # FOR INTERACTIVE MESSASGES REPLIES
                 interactive_msg = body['entry'][0]['changes'][0]['value']['messages'][0].get('interactive')
@@ -370,31 +331,31 @@ async def webhook(request):
 
                     try:
                         await whatsapp.message_wa(assistant_response, user_message)
-                        return web.json_response({"status": "already processing"}, status=202)
+                        return JSONResponse(content={"status": "already processing"}, status_code=202)
                     
                     except ValueError as err:
                         print(err.args)
-                        return web.json_response({"status": f"{err}"}, status=400)
+                        return JSONResponse(content={"status": f"{err}"}, status_code=400)
                 else:
                     print("Message type not authorized by the system.")
-                    return web.json_response({'message': 'Unauthorized message.'})    
+                    return JSONResponse(content={'message': 'Unauthorized message.'})    
         
         # (WORKS!)
         elif is_a_read_confirm:
             print(f"message read confirmation.")
-            return web.json_response({'status': 'read'})
+            return JSONResponse(content={'status': 'read'})
 
         else:
             print("Message type not authorized by the system.")
-            return web.json_response({'message': 'Unauthorized message.'})    
+            return JSONResponse(content={'message': 'Unauthorized message.'})    
     else:
-        return web.json_response({'message': 'error | unexpected body'}, status=400)
+        return JSONResponse(content={'message': 'error | unexpected body'}, status_code=400)
 
     
 
-
+@app.get("/")
 def home():
-    return web.json_response({
+    return JSONResponse(content={
         'success': True,
         'status': 'healthy',
         'error': None
@@ -403,17 +364,13 @@ def home():
 tracemalloc.start()
 
 
-# import logging
-
-# logging.basicConfig(level=logging.DEBUG)
-
-
-app = web.Application()
-app.add_routes([web.get('/webhook', get_verify)])
-app.add_routes([web.post('/webhook', webhook)])
-app.add_routes([web.get('/', home)])
-
-
 if __name__ == '__main__':
-    port = 3000
-    web.run_app(app, port=port)
+    import uvicorn
+    port = int(os.environ.get('PORT', 7000))
+    host = os.environ.get('HOST', 'localhost')
+    try:
+        uvicorn.run(app, host=host, port=port)
+    except OSError as e:
+        print(f"Failed to start server on {host}:{port}")
+        print(f"Error: {e}")
+        raise

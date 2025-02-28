@@ -11,7 +11,8 @@ WHATSAPP_TOKEN = os.getenv('WHATSAPP_TOKEN')
 WHATSAPP_VERSION = os.getenv('WHATSAPP_VERSION')
 
 # (WORKS!)
-async def text(assistant_text, phone_number, phone_number_id):
+async def error_response(phone_number, phone_number_id):
+    text = "Sorry, the chatbot service is currently unavailable."
     url = f'https://graph.facebook.com/{WHATSAPP_VERSION}/{phone_number_id}/messages'
     headers = {
         'Content-Type': 'application/json',
@@ -24,7 +25,7 @@ async def text(assistant_text, phone_number, phone_number_id):
       "type": "text",
       "text": {
         "preview_url": True,
-        "body": f"{assistant_text}"
+        "body": text
       }
     }
     ctx = ssl.create_default_context(cafile=certifi.where())
@@ -32,26 +33,3 @@ async def text(assistant_text, phone_number, phone_number_id):
     async with httpx.AsyncClient(verify=ctx) as client:
         response = await client.post(url, headers=headers, json=data)
         return await response.json(), await client.aclose()
-
-
-
-
-
-"""
-# Example Response:
-
-{
-  "messaging_product": "whatsapp",
-  "contacts": [
-    {
-      "input": "+16505551234",
-      "wa_id": "16505551234"
-    }
-  ],
-  "messages": [
-    {
-      "id": "wamid.HBgLMTY0NjcwNDM1OTUVAgARGBI1RjQyNUE3NEYxMzAzMzQ5MkEA"
-    }
-  ]
-}
-"""

@@ -1,114 +1,86 @@
 import os
-import time
-import shelve
+import json
 
-from openai import OpenAI
-
-from prompts import system_prompt
-from .databaseManager import DatabaseManager
 from load_env import load_vars
+
+from .rag import Rag
+from outputs_instruct import Prompts
 
 load_vars()
 
-openai_api_key = os.getenv("OPENAI_API_KEY")
-
-client = OpenAI(api_key=openai_api_key)
-        
+from openai_client.client import client
 
 # Interact class to manage interactions
-class Interact(DatabaseManager):
-
-    def __init__(self, phone_number, phone_number_id, client, user_name):
-        super().__init__(phone_number, phone_number_id)
+class Interact:
+    def __init__(self, phone_number, phone_number_id, model_id, 
+                 user_name, access_token, system_prompt, thread_id):
+        
         self.phone_number_id = phone_number_id
-        self.client = client
+        self.model_id = model_id
+        self.system_prompt = system_prompt
+        self.access_token = access_token
         self.user_name = user_name
         self.phone_number = phone_number
-        self.initialize_assistant()
+        self.thread_id = thread_id
+        self.file_path = "./threads/" + self.thread_id + ".json"
+        self.check_thread_file()
 
 
-    
-    def initialize_assistant(self):
-        thread_id = self.check_if_thread_exists()
-        assistant_id = self.check_if_assistant_exists()
-    
-        if assistant_id == None and thread_id == None:
-            print("No threads or assistant detected. Creating them now...")
-            assistant_id = self.create_assistant()
-            thread_id = self.create_thread()
-            self.store_thread(thread_id)
-            self.store_assistant(assistant_id)
-            print("Creating Thread_id: ", thread_id)
-            print("Creating Assistant_id: ", assistant_id)
-            print(f"Creating thread and assistant for new user: {self.user_name}, with phone number {self.phone_number}")
-        
-        # Otherwise, retrieve the existing thread
+    def check_thread_file(self):
+        thread = {}
+        # Try to open and read the file
+        if os.path.exists(self.file_path):
+            with open(self.file_path, 'r') as f:
+                thread = json.load(f)
+                if thread:
+                    return self.thread_id
         else:
-            print(f"Retrieving existing thread {thread_id} & assistant {assistant_id} for {self.user_name} with phone number {self.phone_number}")
-        
-        return {"assistant_id": assistant_id, "thread_id": thread_id}
-
-
-
-    def create_assistant(self):
-    # Then reference the collected file IDs
-        assistant = client.beta.assistants.create(
-            instructions=system_prompt,
-            model="gpt-4o-mini",
-            )
-
-        assistant_id = assistant.id
-
-        return assistant_id
-
-
-
-    def create_thread(self):
-        thread = client.beta.threads.create()
-        print("Thread_ID created successfully: ", thread.id)
-        return thread.id
-  
+            thread["id"] = self.thread_id
+            thread['messages'] = []
+            self.json_write(thread)
     
+        return thread['id']
     
+
+    def json_write(self, data):
+        with open(self.file_path, 'w') as f: json.dump(data, f)
+
+
+    def json_get(self):
+        with open(self.file_path, 'r') as f: 
+            conversation = json.load(f) 
+            return conversation
+
     
     def messageAI(self, payload):
         message_type = payload["type"]
         user_message = payload["text"]
-        result = self.initialize_assistant()
-        if "assistant_id" in result:
-            assistant_id = result["assistant_id"]
-            thread_id = result["thread_id"]
 
-            client.beta.threads.messages.create(
-                thread_id=thread_id,
-                role="user",
-                content=f"Information on user_message: {message_type}, user_message: {user_message}"
-            )
+        rag = Rag(1000, self.file_path)
 
-            run = client.beta.threads.runs.create_and_poll(
-                thread_id=thread_id,
-                assistant_id=assistant_id
-            )
-            
-    
-            if run.status == 'completed':
-                messages = client.beta.threads.messages.list(thread_id=thread_id)
-                message_content = messages.data[0].content[0].text
-                # Remove annotations
-                annotations = message_content.annotations
-                for annotation in enumerate(annotations):
-                    message_content.value = message_content.value.replace(annotation.text, '')
-                print("Run completed, returning response")
-                print("Response:", message_content.value)
-                response = message_content.value
+        context = rag.generate_response(user_message)
 
-                return response
-            
-            else:
-                time.sleep(1)  # Add a small delay to avoid spamming the API
-        else:
-            print("Run not completed in time, restarting function")
-            return 400
+        conversation = self.json_get()
+        conversation['messages'].append({"role": "user",
+                                         "content": str(user_message)})
+
+        output_instructions = Prompts.Whatsapp.whatsapp_prompt
+        completion = client.chat.completions.create(
+            model=self.model_id,
+            messages=[
+                {"role": "system", "content": f"Context from past messages: \
+                                                {context}. \n\nUser Message Type:  \
+                                                {message_type}. \
+                                                Instructions: {self.system_prompt} \
+                                                Output Instructions: {output_instructions}"},
+
+                {"role": "user", "content": f"{user_message}"}
+            ]
+        )
+
+        conversation['messages'].append({"role": "assistant",
+                                         "content": completion.choices[0].message.content})
+
+        self.json_write(conversation)
         
-
-        
+        return completion.choices[0].message.content

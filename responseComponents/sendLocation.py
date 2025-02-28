@@ -1,12 +1,9 @@
 import os
-import ssl
+import httpx
 import certifi
-
-import aiohttp
+import ssl
 
 from load_env import load_vars
-
-
 
 load_vars()
 
@@ -29,16 +26,15 @@ async def sendLocation(assistant_text, phone_number, phone_number_id):
         "interactive": {
             "type": "location_request_message",
             "body": {
-            "text": assistant_text
+                "text": assistant_text
             },
             "action": {
-            "name": "send_location"
+                "name": "send_location"
             }
         }
     }
-    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    ctx = ssl.create_default_context(cafile=certifi.where())
 
-    session = aiohttp.ClientSession()
-
-    async with session.post(url, headers=headers, json=data, ssl_context=ssl_context) as response:
-        return await response.json(), await session.close()
+    async with httpx.AsyncClient(verify=ctx) as client:
+        response = await client.post(url, headers=headers, json=data)
+        return await response.json(), await client.aclose()
