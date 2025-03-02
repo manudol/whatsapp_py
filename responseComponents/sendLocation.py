@@ -3,7 +3,11 @@ import httpx
 import certifi
 import ssl
 
+from pydantic import BaseModel
+
 from load_env import load_vars
+
+from interactObjects.structo import Structo
 
 load_vars()
 
@@ -12,6 +16,13 @@ WHATSAPP_VERSION = os.getenv('WHATSAPP_VERSION')
 
 
 async def sendLocation(assistant_text, phone_number, phone_number_id):
+
+    class LocationRequest(BaseModel):
+        text: str
+
+    structo = Structo(assistant_text, LocationRequest)
+    structo_response = structo.get_structo()
+
     url = f'https://graph.facebook.com/{WHATSAPP_VERSION}/{phone_number_id}/messages'
     headers = {
         'Content-Type': 'application/json',
@@ -26,7 +37,7 @@ async def sendLocation(assistant_text, phone_number, phone_number_id):
         "interactive": {
             "type": "location_request_message",
             "body": {
-                "text": assistant_text
+                "text": structo_response.text
             },
             "action": {
                 "name": "send_location"

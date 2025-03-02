@@ -3,7 +3,7 @@ import json
 
 from load_env import load_vars
 
-from .rag import Rag
+from .rag import GetMessages
 from outputs_instruct import Prompts
 
 load_vars()
@@ -56,9 +56,7 @@ class Interact:
         message_type = payload["type"]
         user_message = payload["text"]
 
-        rag = Rag(1000, self.file_path)
-
-        context = rag.generate_response(user_message)
+        past_messages = GetMessages(self.file_path).get_json()
 
         conversation = self.json_get()
         conversation['messages'].append({"role": "user",
@@ -68,9 +66,8 @@ class Interact:
         completion = client.chat.completions.create(
             model=self.model_id,
             messages=[
-                {"role": "system", "content": f"Context from past messages: \
-                                                {context}. \n\nUser Message Type:  \
-                                                {message_type}. \
+                {"role": "system", "content": f"Context from 20 past messages or less: {past_messages}. \
+                                                User Message Type: {message_type}. \
                                                 Instructions: {self.system_prompt} \
                                                 Output Instructions: {output_instructions}"},
 

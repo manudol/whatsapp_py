@@ -112,6 +112,8 @@ class TokenManager:
             print(f"Error decoding token: {e}")
             self._token_expiry = datetime.now() + timedelta(minutes=55)  # Fallback expiry
 
+
+
 class DjangoInteract():
     def __init__(self, access_token, basemodel_id, model_id, phone_number, user_name, business_id, thread_id):
         self.access_token = access_token
@@ -123,7 +125,7 @@ class DjangoInteract():
         self.thread_id = thread_id
 
     async def save_messages(self, user_message, assistant_message, output_type, double_message):
-        url = f"{BACKEND_URL}wa/save_message/"
+        url = f"{BACKEND_URL}basemodel/wa/save_message/"
         headers = {
             "Authorization": f"Bearer {self.access_token}",
             "Content-Type": "application/json"
@@ -146,6 +148,110 @@ class DjangoInteract():
         async with httpx.AsyncClient() as client:
             response = await client.post(url, headers=headers, json=data)
             return response
+
+
+
+class Getters:
+    def __init__(self, access_token, business_id, phone_number_id):
+        self.access_token = access_token
+        self.business_id = business_id
+        self.phone_number_id = phone_number_id
+
+    async def get_product(self, ai_output):
+        url = f"{BACKEND_URL}basemodel/wa/get-product-info/"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+        
+        data = {
+            "phone_number_id": self.phone_number_id,
+            "business_id": self.business_id,
+            "ai_output": ai_output,
+        }
+        
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(url, headers=headers, json=data)
+                if response.status_code == 200:
+                    result = response.json()
+                    return (
+                        result["image_url"],
+                        result["button_text"],
+                        result["button_url"]
+                    )
+                else:
+                    print(f"Error getting product info: {response.status_code}")
+                    print(f"Response: {response.text}")
+                    return None, None, None
+            except Exception as e:
+                print(f"Exception getting product info: {str(e)}")
+                return None, None, None
+    
+    async def get_location(self, ai_output):
+
+        url = f"{BACKEND_URL}basemodel/wa/get-location-info/"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"  
+        }
+
+        data = {
+            "business_id": self.business_id,
+            "ai_output": ai_output,
+        }
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(url, headers=headers, json=data)
+                if response.status_code == 200:
+                    result = response.json()
+                    return (
+                        result["latitude"],
+                        result["longitude"],
+                        result["name"],
+                        result["address"]
+                    )
+                else:
+                    print(f"Error getting location info: {response.status_code}")
+                    print(f"Response: {response.text}")
+                    return None, None, None, None
+            except Exception as e:
+                print(f"Exception getting location info: {str(e)}")
+                return None, None, None, None
+            
+    
+                    
+    async def get_cta_url(self, ai_output):
+
+        url = f"{BACKEND_URL}basemodel/wa/get-cta-url/"
+        headers = {
+            "Authorization": f"Bearer {self.access_token}",
+            "Content-Type": "application/json"
+        }
+
+        data = {
+            "business_id": self.business_id,
+            "ai_output": ai_output,
+        }
+
+        async with httpx.AsyncClient() as client:
+            try:
+                response = await client.post(url, headers=headers, json=data)
+                if response.status_code == 200:
+                    result = response.json()
+                    return result["cta_url"]
+                else:
+                    print(f"Error getting CTA URL: {response.status_code}")
+                    print(f"Response: {response.text}")
+                    return None
+            except Exception as e:
+                print(f"Exception getting CTA URL: {str(e)}")
+                return None 
+
+
+
+
 
 class DjangoAccess:
     def __init__(self, phone_number_id, business_id, phone_number):
