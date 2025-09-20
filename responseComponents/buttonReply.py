@@ -18,8 +18,8 @@ WHATSAPP_VERSION = os.getenv('WHATSAPP_VERSION')
 
 
 
-async def buttonReply(assistant_text, ai_output, phone_number, phone_number_id, access_token, business_id):
-    getters = Getters(access_token, business_id)
+async def buttonReply(ai_output, phone_number, phone_number_id, access_token, business_id):
+    getters = Getters(access_token, business_id, phone_number_id)
     header_text, body_text, footer_text, button_text, button_url = getters.get_cta_url(ai_output)
 
     url = f'https://graph.facebook.com/{WHATSAPP_VERSION}/{phone_number_id}/messages'

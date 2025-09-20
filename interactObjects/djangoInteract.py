@@ -115,9 +115,9 @@ class TokenManager:
 
 
 class DjangoInteract():
-    def __init__(self, access_token, basemodel_id, model_id, phone_number, user_name, business_id, thread_id):
+    def __init__(self, access_token, basemodel_job_id, model_id, phone_number, user_name, business_id, thread_id):
         self.access_token = access_token
-        self.basemodel_id = basemodel_id
+        self.basemodel_job_id = basemodel_job_id
         self.model_id = model_id
         self.phone_number = phone_number
         self.user_name = user_name
@@ -138,7 +138,7 @@ class DjangoInteract():
             "assistant_message": assistant_message, 
             "user_name": self.user_name,
             "thread_id": self.thread_id,
-            "basemodel_id": self.basemodel_id,
+            "basemodel_job_id": self.basemodel_job_id,
             "phone_number": self.phone_number,
             "model_id": self.model_id,
             "output_type": output_type,
@@ -173,12 +173,14 @@ class Getters:
         async with httpx.AsyncClient() as client:
             try:
                 response = await client.post(url, headers=headers, json=data)
+                print("123 product response: ", response.json())
                 if response.status_code == 200:
                     result = response.json()
                     return (
-                        result["image_url"],
-                        result["button_text"],
-                        result["button_url"]
+                        result["product"]["name"],
+                        result["product"]["description"],
+                        result["product"]["image_url"],
+                        result["product"]["price"]
                     )
                 else:
                     print(f"Error getting product info: {response.status_code}")
@@ -259,7 +261,6 @@ class DjangoAccess:
         self.business_id = business_id
         self.phone_number = phone_number
         self.token_manager = TokenManager()
-        self.basemodel_id = None
         self.access_token = None
 
     async def get_service_token(self):
@@ -275,7 +276,7 @@ class DjangoAccess:
         if not self.access_token:
             raise HTTPException(status_code=401, detail="Failed to get access token")
             
-        url = f"{BACKEND_URL}wa/get-model-id/"
+        url = f"{BACKEND_URL}basemodel/wa/get-model-id/"
         headers = {
             "Authorization": f"Bearer {self.access_token}",
         }
@@ -291,6 +292,6 @@ class DjangoAccess:
             model_id = res["data"]["provider_model_id"]
             system_prompt = res["data"]["system_prompt"]
             thread_id = res["data"]["thread_id"]
-            basemodel_id = res["data"]["basemodel_id"]
+            basemodel_job_id = res["data"]["basemodel_job_id"]
 
-            return model_id, system_prompt, thread_id, self.access_token, basemodel_id
+            return model_id, system_prompt, thread_id, self.access_token, basemodel_job_id

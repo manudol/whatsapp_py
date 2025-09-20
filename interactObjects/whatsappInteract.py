@@ -5,13 +5,12 @@ from responseComponents import audioResponse, buttonReply, text, location, sendL
 
 class WhatsAppHandler:
 
-    def __init__(self, phone_number_id, phone_number, message_id, access_token, business_id, output_type):
+    def __init__(self, phone_number_id, phone_number, message_id, access_token, business_id):
         self.phone_number_id = phone_number_id
         self.phone_number = phone_number
         self.message_id = message_id
         self.access_token = access_token
         self.business_id = business_id
-        self.output_type = output_type
 
     async def message_wa(self, assistant_text, user_message):
         print(assistant_text)
@@ -51,12 +50,12 @@ class WhatsAppHandler:
                 
                 if post_function:
                     args_mapping = {
-                        "text": (output_type, ai_output, self.phone_number, self.phone_number_id),
-                        "audio": (output_type, ai_output, self.phone_number, self.phone_number_id),
-                        "cta_button": (output_type, assistant_text, ai_output, self.phone_number, self.phone_number_id),
-                        "location": (output_type, assistant_text, ai_output, self.phone_number, self.phone_number_id),
-                        "request_location": (output_type, ai_output, self.phone_number, self.phone_number_id),
-                        "product": (output_type, ai_output, self.phone_number, self.phone_number_id, self.access_token, self.business_id)
+                        "text": (ai_output, self.phone_number, self.phone_number_id),
+                        "audio": (ai_output, self.phone_number, self.phone_number_id),
+                        "cta_button": (ai_output, ai_output, self.phone_number, self.phone_number_id),
+                        "location": (ai_output, self.phone_number, self.phone_number_id, self.access_token, self.business_id),
+                        "request_location": (ai_output, self.phone_number, self.phone_number_id),
+                        "product": (ai_output, self.phone_number, self.phone_number_id, self.access_token, self.business_id)
                     }
                     
                     args = args_mapping.get(output_type)
@@ -98,8 +97,8 @@ class WhatsAppHandler:
             args_mapping = {
                 "text": (ai_output, self.phone_number, self.phone_number_id),
                 "audio": (ai_output, self.phone_number, self.phone_number_id),
-                "cta_button": (assistant_text, ai_output, self.phone_number, self.phone_number_id),
-                "location": (assistant_text, ai_output, self.phone_number, self.phone_number_id),
+                "cta_button": (ai_output, self.phone_number, self.phone_number_id, self.access_token, self.business_id),
+                "location": (ai_output, self.phone_number, self.phone_number_id, self.access_token, self.business_id),
                 "request_location": (ai_output, self.phone_number, self.phone_number_id),
                 "product": (ai_output, self.phone_number, self.phone_number_id, self.access_token, self.business_id)
             }

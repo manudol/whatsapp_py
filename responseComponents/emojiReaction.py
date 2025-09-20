@@ -46,4 +46,4 @@ async def emojiReaction(assistant_text, phone_number, phone_number_id, message_i
     ctx = ssl.create_default_context(cafile=certifi.where())
     async with httpx.AsyncClient(verify=ctx) as client1:
         response = await client1.post(url, headers=headers, json=data)
-        return await response.json(), await client1.aclose()
+        return response.json()

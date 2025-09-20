@@ -32,4 +32,4 @@ async def error_response(phone_number, phone_number_id):
 
     async with httpx.AsyncClient(verify=ctx) as client:
         response = await client.post(url, headers=headers, json=data)
-        return await response.json(), await client.aclose()
+        return response.json()

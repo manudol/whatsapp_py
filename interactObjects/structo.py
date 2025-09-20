@@ -8,7 +8,7 @@ class Structo:
 
     def get_structo(self):
         completion = client.beta.chat.completions.parse(
-            model="gpt-4o-2024-02-15",
+            model="gpt-4o-2024-08-06",
             messages=[{"role": "system", 
                        "content": f"You are a helpful assistant that can help with structuring data. \
                        Structure your output using the informaitons found in the whatsapp bot's ai message: {self.ai_output}. \

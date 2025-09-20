@@ -26,7 +26,14 @@ app = FastAPI()
 
 
 @app.get("/webhook")
-async def get_verify(hub_mode: str = None, hub_verify_token: str = None, hub_challenge: str = None):
+async def get_verify(request: Request):
+    print("request: ", request)
+    hub_mode = request.query_params.get('hub.mode')
+    hub_verify_token = request.query_params.get('hub.verify_token')
+    hub_challenge = request.query_params.get('hub.challenge')
+    print("hub_mode: ", hub_mode)
+    print("hub_verify_token: ", hub_verify_token)
+    print("hub_challenge: ", hub_challenge)
     if hub_mode and hub_verify_token:
         if hub_mode == 'subscribe' and hub_verify_token == WHATSAPP_VERIFY_TOKEN:
             print("WEBHOOK VERIFIED")
@@ -81,14 +88,14 @@ async def webhook(request: Request):
               system_prompt, 
               thread_id, 
               access_token, 
-              basemodel_id ) = await django_access.get_modelID_and_conversation()
+              basemodel_job_id ) = await django_access.get_modelID_and_conversation()
             
             print("model_id 123: ", model_id)
 
 
             interact = Interact(phone_number, phone_number_id, model_id, user_name, access_token, system_prompt, thread_id)
             whatsapp = WhatsAppHandler(phone_number_id, phone_number, message_id, access_token, business_id)
-            dj_interact = DjangoInteract(access_token, basemodel_id, model_id, phone_number, user_name, business_id, thread_id)
+            dj_interact = DjangoInteract(access_token, basemodel_job_id, model_id, phone_number, user_name, business_id, thread_id)
 
 
             #FOR TEXT (WORKS!)

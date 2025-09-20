@@ -14,8 +14,8 @@ WHATSAPP_VERSION = os.getenv('WHATSAPP_VERSION')
 
 
 # (WORKS!)
-async def location(assistant_text, ai_output, phone_number, phone_number_id, access_token, business_id):
-    getters = Getters(access_token, business_id)
+async def location(ai_output, phone_number, phone_number_id, access_token, business_id):
+    getters = Getters(access_token, business_id, phone_number_id)
     latitude, longitude, name, address = getters.get_location(ai_output)
 
 
