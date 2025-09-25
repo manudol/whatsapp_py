@@ -6,7 +6,7 @@ assistants_db.db
 close_session.py
 downloaded_images/
 assistant.json
-
+threads/
 
 
 # Byte-compiled / optimized / DLL files
